@@ -145,6 +145,15 @@ class TileManager(QObject):
 
     def update_tile_content(self, tile_id: str, new_content: str, source=None):
         """Updates tile content with debouncing and circular update prevention."""
+        # Get current content to check if it actually changed
+        current_tile = self.get_tile_by_id(tile_id)
+        if not current_tile:
+            return
+            
+        # Skip if content hasn't actually changed
+        if current_tile.get('content') == new_content:
+            return
+            
         # Prevent processing our own updates
         if self._update_in_progress:
             return

@@ -1,10 +1,10 @@
 # pinpoint/plugins/note_plugin.py
 
 from typing import Type, Dict, Any
-from ..plugin_registry import TilePlugin, TileMetadata, TileCapabilities
+from .plugin_registry import TilePlugin, TileMetadata, TileCapabilities
 from ..note_tile import NoteTile
 from ..note_editor_widget import NoteEditorWidget
-
+from PySide6.QtCore import Qt, QTimer
 
 class NotePlugin(TilePlugin):
     """Plugin for text note tiles."""

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Dict, Type, Any, List, Optional
 from PySide6.QtCore import QObject, Signal
-from .base_tile import BaseTile
+from ..base_tile import BaseTile
 
 
 class TileCapabilities:

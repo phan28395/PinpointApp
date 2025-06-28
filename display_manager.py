@@ -13,53 +13,51 @@ class DisplayInfo:
         self.screen = screen
         self.index = index
         self.name = screen.name()
-        self.geometry = screen.geometry()  # QRect with LOGICAL position and size
-        self.available_geometry = screen.availableGeometry()
+        self.geometry = screen.geometry()  # QRect with position and size
+        self.available_geometry = screen.availableGeometry()  # Excluding taskbars
+        self.physical_size = screen.physicalSize()  # Physical size in mm
+        self.dpi = screen.physicalDotsPerInch()
         self.device_pixel_ratio = screen.devicePixelRatio()
         self.is_primary = screen == QApplication.primaryScreen()
         
     @property
     def width(self) -> int:
-        """Returns the REAL PHYSICAL width in pixels."""
-        return int(self.geometry.width() * self.device_pixel_ratio)
+        return self.geometry.width()
         
     @property
     def height(self) -> int:
-        """Returns the REAL PHYSICAL height in pixels."""
-        return int(self.geometry.height() * self.device_pixel_ratio)
+        return self.geometry.height()
         
     @property
     def x(self) -> int:
-        """Returns the screen's top-left X coordinate."""
         return self.geometry.x()
         
     @property
     def y(self) -> int:
-        """Returns the screen's top-left Y coordinate."""
         return self.geometry.y()
         
     @property
     def resolution_string(self) -> str:
-        """Returns the PHYSICAL resolution as a string (e.g., "3840x2160")."""
         return f"{self.width}x{self.height}"
         
     @property
     def display_name(self) -> str:
-        """Returns a user-friendly name for the display."""
-        primary_indicator = " (Primary)" if self.is_primary else ""
-        return f"Display {self.index + 1}: {self.resolution_string}{primary_indicator}"
+        primary = " (Primary)" if self.is_primary else ""
+        return f"Display {self.index + 1}: {self.resolution_string}{primary}"
         
     def to_dict(self) -> Dict:
         """Convert to dictionary for storage."""
         return {
+            "index": self.index,
             "name": self.name,
-            "physical_resolution": self.resolution_string,
-            "logical_resolution": f"{self.geometry.width()}x{self.geometry.height()}",
-            "pixel_ratio": self.device_pixel_ratio,
             "x": self.x,
             "y": self.y,
+            "width": self.width,
+            "height": self.height,
+            "dpi": self.dpi,
             "is_primary": self.is_primary
         }
+
 
 class DisplayManager(QObject):
     """Manages display detection and coordinate transformation."""

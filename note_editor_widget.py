@@ -14,7 +14,6 @@ class NoteEditorWidget(QWidget):
         
         # Flag to prevent circular updates
         self._updating_content = False
-        self._last_emitted_content = tile_data.get('content', '')
         
         # Setup UI
         layout = QVBoxLayout(self)
@@ -51,12 +50,14 @@ class NoteEditorWidget(QWidget):
     def _save_content(self):
         """Saves the content after debounce period."""
         if self.pending_content is not None:
-            self._last_emitted_content = self.pending_content
-            self.manager.update_tile_content(
-                self.tile_id, 
-                self.pending_content,
-                source="editor"  # Identify the source
-            )
+            # Only save if content is still what we intended to save
+            current_content = self.text_edit.toPlainText()
+            if current_content == self.pending_content:
+                self.manager.update_tile_content(
+                    self.tile_id, 
+                    self.pending_content,
+                    source="editor"  # Identify the source
+                )
             self.pending_content = None
             
     def on_external_update(self, tile_data: dict):
@@ -67,8 +68,8 @@ class NoteEditorWidget(QWidget):
             
         new_content = tile_data.get('content', '')
         
-        # Skip if this is our own update echoing back
-        if new_content == self._last_emitted_content:
+        # Check if we have a pending update with this content
+        if self.pending_content == new_content:
             return
             
         current_content = self.text_edit.toPlainText()

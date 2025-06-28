@@ -260,45 +260,30 @@ class ConfigurableNoteEditor(NoteEditorWidget):
     """Enhanced editor with configuration panel."""
     
     def __init__(self, tile_data: dict, manager, parent=None):
-        # Don't call super().__init__ yet, we'll do our own setup
-        QWidget.__init__(self, parent)
-        self.tile_id = tile_data['id']
+        # 1. Call the parent constructor FIRST.
+        # This properly initializes everything from NoteEditorWidget, including
+        # the main layout, the text_edit widget, timers, and all signals.
+        super().__init__(tile_data, manager, parent)
+
+        # Keep a full copy of the tile data for the settings panel.
         self.tile_data = tile_data.copy()
-        self.manager = manager
-        
-        # Main layout
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Settings panel
+
+        # 2. Create the settings widgets that are unique to this class.
         self.settings_panel = self._create_settings_panel()
         self.settings_panel.setVisible(False)
-        main_layout.addWidget(self.settings_panel)
         
-        # Toggle button for settings
         self.toggle_settings_btn = QPushButton("⚙️ Settings")
         self.toggle_settings_btn.setCheckable(True)
         self.toggle_settings_btn.toggled.connect(self.settings_panel.setVisible)
         self.toggle_settings_btn.setMaximumHeight(30)
-        main_layout.addWidget(self.toggle_settings_btn)
         
-        # Text editor
-        self.text_edit = QTextEdit()
-        self.text_edit.setPlainText(tile_data.get('content', ''))
-        main_layout.addWidget(self.text_edit)
+        # 3. Insert the new settings widgets into the layout created by the parent.
+        # We use insertWidget(0, ...) to add them at the very top.
+        self.layout().insertWidget(0, self.settings_panel)
+        self.layout().insertWidget(1, self.toggle_settings_btn)
         
-        # Apply current configuration
+        # 4. Apply the specific styling for this configurable note.
         self._apply_configuration()
-        
-        # Setup the rest like parent class
-        self._updating_content = False
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self._save_content)
-        self.update_timer.setSingleShot(True)
-        self.pending_content = None
-        
-        self.text_edit.textChanged.connect(self.on_text_changed)
-        self.manager.tile_updated_in_studio.connect(self.on_external_update)
         
     def _create_settings_panel(self):
         """Create the settings panel."""
@@ -359,8 +344,6 @@ class ConfigurableNoteEditor(NoteEditorWidget):
         
     def _apply_configuration(self):
         """Apply configuration to the editor."""
-        # Similar to ConfigurableNoteTile._apply_configuration
-        # but applied to the editor's text widget
         config = self.tile_data
         
         font = QFont(
@@ -369,20 +352,12 @@ class ConfigurableNoteEditor(NoteEditorWidget):
         )
         self.text_edit.setFont(font)
         
-        # Apply theme colors to editor
         theme_name = config.get("theme", "default")
-        if theme_name != "custom":
-            themes = NotePlugin.get_theme_presets()
-            if theme_name in themes:
-                theme = themes[theme_name]
-                text_color = theme["text_color"]
-                bg_color = theme["background_color"]
-            else:
-                text_color = config.get("text_color", "#333")
-                bg_color = "white"
-        else:
-            text_color = config.get("text_color", "#333")
-            bg_color = "white"
+        themes = NotePlugin.get_theme_presets()
+        theme = themes.get(theme_name, themes["default"])
+
+        text_color = config.get("text_color", theme["text_color"])
+        bg_color = config.get("background_color", theme["background_color"])
             
         self.text_edit.setStyleSheet(f"""
             QTextEdit {{ 
@@ -397,7 +372,6 @@ class ConfigurableNoteEditor(NoteEditorWidget):
         """Handle theme change."""
         self.tile_data["theme"] = theme_name
         if theme_name != "custom":
-            # Apply preset colors
             themes = NotePlugin.get_theme_presets()
             if theme_name in themes:
                 theme = themes[theme_name]
@@ -412,27 +386,28 @@ class ConfigurableNoteEditor(NoteEditorWidget):
         self.tile_data["font_size"] = self.font_size_spin.value()
         self.tile_data["text_align"] = self.align_combo.currentText()
         self.tile_data["word_wrap"] = self.word_wrap_check.isChecked()
+        self.tile_data["theme"] = "custom" # Changing a setting makes it a custom theme
+        self.theme_combo.setCurrentText("custom")
         self._apply_configuration()
         self._save_config()
         
     def _save_config(self):
         """Save configuration changes."""
-        # Update the tile through the manager
-        # This will trigger updates to all views
+        current_text = self.text_edit.toPlainText()
+        self.tile_data['content'] = current_text
         self.manager.update_tile_config(self.tile_id, self.tile_data)
         
-    # Keep all the parent class methods for text handling
-    from PySide6.QtCore import QTimer
-    
-    def on_text_changed(self):
-        if self._updating_content:
-            return
-        self.pending_content = self.text_edit.toPlainText()
-        self.update_timer.stop()
-        self.update_timer.start(300)
-        
+    # This class correctly OVERRIDES the parent's _save_content method.
     def _save_content(self):
         if self.pending_content is not None:
+            # This line was missing from your colleague's version,
+            # which would have caused bugs later.
+            self._last_emitted_content = self.pending_content
+            
+            # Now, add the content to our local data copy and save.
             self.tile_data["content"] = self.pending_content
             self.manager.update_tile_content(self.tile_id, self.pending_content, source="editor")
             self.pending_content = None
+    
+    # We can REMOVE the on_text_changed method entirely, because it's
+    # identical to the one in NoteEditorWidget, which we now inherit correctly.

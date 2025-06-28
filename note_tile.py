@@ -14,7 +14,6 @@ class NoteTile(BaseTile):
         
         # Flag to prevent circular updates
         self._updating_content = False
-        self._last_emitted_content = tile_data.get("content", "")
         
         # --- NoteTile Specific Setup ---
         self.text_edit = QTextEdit()
@@ -51,9 +50,11 @@ class NoteTile(BaseTile):
         if self.tile_id != tile_data.get('id'):
             return
             
-        # Check if this is our own update echoing back
+        # Get the new content
         new_content = tile_data.get('content', '')
-        if new_content == self._last_emitted_content:
+        
+        # Check if we have a pending update with this exact content
+        if self.pending_content == new_content:
             return
             
         # Check if content is actually different from what's displayed
@@ -94,9 +95,10 @@ class NoteTile(BaseTile):
     def _emit_content_change(self):
         """Emits the content change signal after debounce period."""
         if self.pending_content is not None:
-            # Track what we're emitting to prevent echo
-            self._last_emitted_content = self.pending_content
-            self.tile_content_changed.emit(self.tile_id, self.pending_content)
+            # Only emit if content is still different from what we last knew
+            current_content = self.text_edit.toPlainText()
+            if current_content == self.pending_content:
+                self.tile_content_changed.emit(self.tile_id, self.pending_content)
             self.pending_content = None
             
     def closeEvent(self, event):

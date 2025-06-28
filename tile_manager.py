@@ -3,7 +3,8 @@
 import uuid
 from PySide6.QtCore import Signal, QObject, QTimer
 from .storage import StorageManager
-from .plugin_registry import get_registry
+from .plugins.plugin_registry import get_registry
+from .display_manager import get_display_manager
 
 
 class TileManager(QObject):
@@ -19,6 +20,9 @@ class TileManager(QObject):
         # Plugin registry
         self.registry = get_registry()
         
+        # Display manager
+        self.display_manager = get_display_manager()
+        
         # Cache for data to reduce file I/O
         self._data_cache = None
         self._cache_dirty = False
@@ -32,6 +36,7 @@ class TileManager(QObject):
         
         # Update source tracking to prevent circular updates
         self._update_in_progress = False
+        self._last_update_source = None
         
         # Connect to plugin registry signals
         self.registry.plugin_loaded.connect(self._on_plugin_loaded)
@@ -145,6 +150,9 @@ class TileManager(QObject):
 
     def update_tile_content(self, tile_id: str, new_content: str, source=None):
         """Updates tile content with debouncing and circular update prevention."""
+        # Store the source for filtering
+        self._last_update_source = source
+        
         # Get current content to check if it actually changed
         current_tile = self.get_tile_by_id(tile_id)
         if not current_tile:
@@ -179,6 +187,7 @@ class TileManager(QObject):
             self.tile_updated_in_studio.emit(updated_tile_data)
         finally:
             self._update_in_progress = False
+            self._last_update_source = None
         
         # Restart timer (debounce)
         self.save_timer.stop()
@@ -229,23 +238,55 @@ class TileManager(QObject):
             self.pending_config_updates.clear()
 
     def create_new_layout(self):
+        """Create a new layout with display settings."""
         app_data = self._get_cached_data()
+        
+        # Get current display info
+        selected_display = self.display_manager.get_selected_display()
+        display_index = self.display_manager.selected_display_index or 0
+        
         new_layout = {
             "id": f"layout_{uuid.uuid4()}", 
             "name": f"New Layout {len(app_data.get('layouts', [])) + 1}", 
-            "tile_instances": []
+            "tile_instances": [],
+            "display_settings": {
+                "target_display": display_index,
+                "display_info": selected_display.to_dict() if selected_display else None
+            }
         }
         app_data.get("layouts", []).append(new_layout)
         self._cache_dirty = True
         self._save_cached_data()  # Immediate save for structural changes
         return new_layout
+    
+    def update_layout_display(self, layout_id: str, display_index: int):
+        """Update the target display for a layout."""
+        app_data = self._get_cached_data()
+        for layout in app_data.get("layouts", []):
+            if layout['id'] == layout_id:
+                if "display_settings" not in layout:
+                    layout["display_settings"] = {}
+                    
+                layout["display_settings"]["target_display"] = display_index
+                
+                # Store current display info for reference
+                display = self.display_manager.get_display(display_index)
+                if display:
+                    layout["display_settings"]["display_info"] = display.to_dict()
+                    
+                break
+                
+        self._cache_dirty = True
+        self._save_cached_data()
 
     def clear_live_tiles(self):
         # Disconnect signals before closing to prevent issues
         for tile_window in self.active_live_tiles.values():
             try:
                 tile_window.tile_content_changed.disconnect()
-                self.tile_updated_in_studio.disconnect(tile_window.update_display_content)
+                # Disconnect the specific update handler
+                if hasattr(tile_window, '_update_handler'):
+                    self.tile_updated_in_studio.disconnect(tile_window._update_handler)
                 if hasattr(tile_window, 'tile_config_changed'):
                     self.tile_config_updated.disconnect(tile_window.update_display_config)
             except:
@@ -253,12 +294,31 @@ class TileManager(QObject):
             tile_window.close()
         self.active_live_tiles.clear()
 
-    def project_layout(self, layout_id: str):
-        """Project a layout using the plugin system to create tiles."""
+    def project_layout(self, layout_id: str, display_index: int = None):
+        """Project a layout to a specific display using actual screen coordinates."""
         self.clear_live_tiles()
         layout_data = self.get_layout_by_id(layout_id)
         if not layout_data: 
             return
+            
+        # Determine which display to use
+        if display_index is None:
+            # Use layout's saved display or primary
+            display_settings = layout_data.get("display_settings", {})
+            display_index = display_settings.get("target_display", 0)
+            
+        # Select the display
+        self.display_manager.select_display(display_index)
+        display = self.display_manager.get_display(display_index)
+        
+        if not display:
+            print(f"Display {display_index} not found")
+            return
+            
+        print(f"Projecting layout '{layout_data['name']}' to {display.display_name}")
+        
+        # Update layout's display settings
+        self.update_layout_display(layout_id, display_index)
             
         for instance in layout_data.get("tile_instances", []):
             tile_def = self.get_tile_by_id(instance['tile_id'])
@@ -267,6 +327,15 @@ class TileManager(QObject):
                 
             # Merge tile definition with instance data
             live_tile_data = {**tile_def, **instance}
+            
+            # Convert editor coordinates to screen coordinates
+            # Editor coordinates are relative to display, screen coordinates are absolute
+            screen_x = instance['x'] + display.x
+            screen_y = instance['y'] + display.y
+            
+            # Update position for screen placement
+            live_tile_data['x'] = screen_x
+            live_tile_data['y'] = screen_y
             
             # Get tile type
             tile_type = tile_def.get('type', 'note')
@@ -277,11 +346,29 @@ class TileManager(QObject):
                 print(f"Failed to create tile of type: {tile_type}")
                 continue
                 
-            # Connect signals
+            # Create a unique source identifier for this tile instance
+            tile_instance_id = instance['instance_id']
+            
+            # Connect signals with source tracking
             tile_window.tile_content_changed.connect(
-                lambda tid, content: self.update_tile_content(tid, content, source="live_tile")
+                lambda tid, content, inst_id=tile_instance_id: 
+                    self.update_tile_content(tid, content, source=f"live_tile_{inst_id}")
             )
-            self.tile_updated_in_studio.connect(tile_window.update_display_content)
+            
+            # Create a filtered update function for this specific tile
+            def create_update_handler(window, inst_id):
+                def handler(tile_data):
+                    # Only update if this wasn't from the same live tile instance
+                    update_source = getattr(self, '_last_update_source', None)
+                    if update_source != f"live_tile_{inst_id}":
+                        window.update_display_content(tile_data)
+                return handler
+            
+            update_handler = create_update_handler(tile_window, tile_instance_id)
+            self.tile_updated_in_studio.connect(update_handler)
+            
+            # Store the connection for cleanup
+            tile_window._update_handler = update_handler
             
             # Connect config update if supported
             if hasattr(tile_window, 'update_display_config'):
@@ -290,6 +377,92 @@ class TileManager(QObject):
             self.active_live_tiles[instance['instance_id']] = tile_window
             tile_window.show()
             
+    def project_layout_to_all_displays(self, layout_id: str):
+        """Project a layout to all available displays (span mode)."""
+        self.clear_live_tiles()
+        layout_data = self.get_layout_by_id(layout_id)
+        if not layout_data: 
+            return
+            
+        print(f"Projecting layout '{layout_data['name']}' to all displays")
+        
+        # Get combined geometry of all displays
+        combined_rect = self.display_manager.get_combined_geometry()
+        
+        for instance in layout_data.get("tile_instances", []):
+            tile_def = self.get_tile_by_id(instance['tile_id'])
+            if not tile_def:
+                continue
+                
+            # Merge tile definition with instance data
+            live_tile_data = {**tile_def, **instance}
+            
+            # For spanning mode, use absolute coordinates
+            # Assuming editor shows primary display, offset by combined rect origin
+            screen_x = instance['x'] + combined_rect.x()
+            screen_y = instance['y'] + combined_rect.y()
+            
+            live_tile_data['x'] = screen_x
+            live_tile_data['y'] = screen_y
+            
+            # Get tile type
+            tile_type = tile_def.get('type', 'note')
+            
+            # Create tile using plugin system
+            tile_window = self.registry.create_tile(tile_type, live_tile_data)
+            if not tile_window:
+                continue
+                
+            # Connect signals (same as single display)
+            tile_instance_id = instance['instance_id']
+            
+            tile_window.tile_content_changed.connect(
+                lambda tid, content, inst_id=tile_instance_id: 
+                    self.update_tile_content(tid, content, source=f"live_tile_{inst_id}")
+            )
+            
+            def create_update_handler(window, inst_id):
+                def handler(tile_data):
+                    update_source = getattr(self, '_last_update_source', None)
+                    if update_source != f"live_tile_{inst_id}":
+                        window.update_display_content(tile_data)
+                return handler
+            
+            update_handler = create_update_handler(tile_window, tile_instance_id)
+            self.tile_updated_in_studio.connect(update_handler)
+            tile_window._update_handler = update_handler
+            
+            if hasattr(tile_window, 'update_display_config'):
+                self.tile_config_updated.connect(tile_window.update_display_config)
+            
+            self.active_live_tiles[instance['instance_id']] = tile_window
+            tile_window.show()
+            
+    def get_layout_display_info(self, layout_id: str) -> dict:
+        """Get display information for a layout."""
+        layout = self.get_layout_by_id(layout_id)
+        if not layout:
+            return {}
+            
+        display_settings = layout.get("display_settings", {})
+        target_display = display_settings.get("target_display", 0)
+        
+        # Get current display info
+        display = self.display_manager.get_display(target_display)
+        if display:
+            return {
+                "target_display": target_display,
+                "display_name": display.display_name,
+                "resolution": display.resolution_string,
+                "saved_info": display_settings.get("display_info")
+            }
+        else:
+            return {
+                "target_display": target_display,
+                "display_name": "Unknown",
+                "saved_info": display_settings.get("display_info")
+            }
+
     def create_tile_editor(self, tile_id: str):
         """Create an editor for a tile using the plugin system."""
         tile_data = self.get_tile_by_id(tile_id)

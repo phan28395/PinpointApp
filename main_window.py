@@ -1,5 +1,6 @@
 # pinpoint/main_window.py
-
+from .display_manager import get_display_manager
+from PySide6.QtGui import QActionGroup
 import uuid
 from PySide6.QtWidgets import (QMainWindow, QLabel, QSplitter, QListWidget, 
                               QListWidgetItem, QTabWidget, QPushButton, 
@@ -18,6 +19,7 @@ class NewTileDialog(QDialog):
     
     def __init__(self, manager, parent=None):
         super().__init__(parent)
+        
         self.manager = manager
         self.selected_type = None
         
@@ -208,6 +210,7 @@ class TileLibraryWidget(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self, manager):
         super().__init__()
+        self.display_manager = get_display_manager()
         self.manager = manager
         self.editors = {}
         
@@ -383,15 +386,39 @@ class MainWindow(QMainWindow):
         item = self.layout_library_list.itemAt(position)
         if not item:
             return
-            
+
+        layout_id = item.data(Qt.ItemDataRole.UserRole)
         menu = QMenu()
-        project_action = menu.addAction("▶️ Project this Layout")
         
-        action = menu.exec(self.layout_library_list.mapToGlobal(position))
+        # Get layout display info
+        display_info = self.manager.get_layout_display_info(layout_id)
+        current_display = display_info.get("target_display", 0)
         
-        if action == project_action:
-            self.project_selected_layout()
-            
+        # Create display submenu
+        display_menu = menu.addMenu("📺 Project to Display")
+        display_group = QActionGroup(self)
+        
+        # Add option for each display
+        for i, display in enumerate(self.display_manager.displays):
+            action = display_menu.addAction(display.display_name)
+            action.setCheckable(True)
+            action.setChecked(i == current_display)
+            action.setData(i)
+            action.triggered.connect(
+                lambda checked, idx=i: self.project_to_display(layout_id, idx)
+            )
+            display_group.addAction(action)
+        
+        display_menu.addSeparator()
+        
+        # Add "All Displays" option
+        all_displays_action = display_menu.addAction("🖥️ All Displays (Span)")
+        all_displays_action.triggered.connect(
+            lambda: self.manager.project_layout_to_all_displays(layout_id)
+        )
+        
+        menu.exec(self.layout_library_list.mapToGlobal(position))
+                    
     def project_selected_layout(self):
         """Calls the manager to show the selected layout's tiles live."""
         selected_item = self.layout_library_list.currentItem()
@@ -400,7 +427,12 @@ class MainWindow(QMainWindow):
         layout_id = selected_item.data(Qt.ItemDataRole.UserRole)
         print(f"Projecting layout {layout_id}...")
         self.manager.project_layout(layout_id)
-        
+
+    def project_to_display(self, layout_id: str, display_index: int):
+        """Project layout to a specific display."""
+        print(f"Projecting layout {layout_id} to display {display_index}")
+        self.manager.project_layout(layout_id, display_index)
+
     def populate_all_libraries(self):
         """Populate both layout and tile libraries."""
         self.populate_layout_library()
@@ -417,22 +449,87 @@ class MainWindow(QMainWindow):
         """Populate the layout library."""
         self.layout_library_list.clear()
         all_layouts = self.manager.storage.load_data().get("layouts", [])
+        
         for layout_data in all_layouts:
-            list_item = QListWidgetItem(f"📐 {layout_data['name']}")
-            list_item.setData(Qt.ItemDataRole.UserRole, layout_data['id'])
-            self.layout_library_list.addItem(list_item)
+            # Get display info
+            display_info = self.manager.get_layout_display_info(layout_data['id'])
+            display_name = display_info.get("display_name", "No Display")
             
+            # Create item with display indicator
+            item_text = f"📐 {layout_data['name']} [{display_name}]"
+            list_item = QListWidgetItem(item_text)
+            list_item.setData(Qt.ItemDataRole.UserRole, layout_data['id'])
+            
+            # Add tooltip with more info
+            tooltip = f"Layout: {layout_data['name']}\n"
+            tooltip += f"Target Display: {display_name}\n"
+            tooltip += f"Tiles: {len(layout_data.get('tile_instances', []))}"
+            list_item.setToolTip(tooltip)
+            
+            self.layout_library_list.addItem(list_item)            
+
     def on_layout_item_selected(self, item):
         """Handle layout selection."""
         layout_id = item.data(Qt.ItemDataRole.UserRole)
+        
+        # Check if editor already exists
         if layout_id not in self.editors:
             layout_data = self.manager.get_layout_by_id(layout_id)
             if not layout_data:
                 return
+                
+            # Create new editor
             self.editors[layout_id] = LayoutEditor(layout_data, self.manager)
             self.central_stack.addWidget(self.editors[layout_id])
+            
+            # Connect to display changes in the editor
+            if hasattr(self.editors[layout_id], 'display_combo'):
+                self.editors[layout_id].display_combo.currentIndexChanged.connect(
+                    lambda idx: self._on_editor_display_changed(layout_id, idx)
+                )
+        
+        # Switch to this editor
         self.central_stack.setCurrentWidget(self.editors[layout_id])
         
+        # Update the editor's display selection to match saved layout settings
+        layout_data = self.manager.get_layout_by_id(layout_id)
+        if layout_data:
+            display_settings = layout_data.get("display_settings", {})
+            target_display = display_settings.get("target_display", 0)
+            
+            # Update the display combo in the editor
+            editor = self.editors[layout_id]
+            if hasattr(editor, 'display_combo'):
+                # Block signals to prevent triggering save during load
+                editor.display_combo.blockSignals(True)
+                
+                # Set the display if it exists
+                if target_display < editor.display_combo.count():
+                    editor.display_combo.setCurrentIndex(target_display)
+                else:
+                    # Display no longer exists, use primary
+                    editor.display_combo.setCurrentIndex(0)
+                    
+                editor.display_combo.blockSignals(False)
+                
+                # Trigger display update in editor
+                editor._on_display_selected(editor.display_combo.currentIndex())
+
+    def _on_editor_display_changed(self, layout_id: str, display_index: int):
+        """Handle when user changes display in the editor."""
+        # Save the display selection to the layout
+        self.manager.update_layout_display(layout_id, display_index)
+        
+        # Update the library to show new display
+        self.populate_layout_library()
+        
+        # Keep the same item selected
+        for i in range(self.layout_library_list.count()):
+            item = self.layout_library_list.item(i)
+            if item.data(Qt.ItemDataRole.UserRole) == layout_id:
+                item.setSelected(True)
+                break
+
     def on_tile_selected(self, tile_id):
         """Handle tile selection from the library."""
         if tile_id not in self.editors:

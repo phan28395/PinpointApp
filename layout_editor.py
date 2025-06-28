@@ -2,7 +2,7 @@
 
 import uuid
 from PySide6.QtWidgets import (QWidget, QGraphicsView, QGraphicsScene, QVBoxLayout, 
-                              QHBoxLayout, QComboBox, QLabel, QPushButton, QSlider,
+                              QHBoxLayout, QComboBox, QLabel, QPushButton,
                               QGraphicsRectItem, QGraphicsTextItem)
 from PySide6.QtGui import QPen, QColor, QBrush, QPainter, QFont
 from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer
@@ -37,13 +37,15 @@ class LayoutView(QGraphicsView):
         
         # Display visualization
         self.show_display_bounds = True
-        self.display_scale = 1.0
         
         self.setAcceptDrops(True)
         self.setRenderHint(self.renderHints().Antialiasing)
         self.setDragMode(self.DragMode.NoDrag)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        
+        # Fixed view - no scrollbars needed since we show exact display size
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
         self.setStyleSheet("QGraphicsView { background-color: #1a1a1a; border: none; }")
         
         # Grid settings
@@ -54,70 +56,83 @@ class LayoutView(QGraphicsView):
         # Performance optimization: cache grid drawing
         self.setCacheMode(self.CacheModeFlag.CacheBackground)
         
-    def update_display_scale(self, scale: float):
-        """Update the display scale for visualization."""
-        self.display_scale = scale
-        self.resetTransform()
-        self.scale(scale, scale)
-        self.viewport().update()
-        
     def fit_display_in_view(self):
-        """Automatically scale to fit the selected display in view."""
+        """Scale the view to show the entire display with some padding."""
         display = self.display_manager.get_selected_display()
         if not display:
             return
             
         # Calculate scale to fit display with padding
-        padding = 50
-        scale = self.display_manager.calculate_editor_scale(
-            self.viewport().width(),
-            self.viewport().height(),
-            padding
-        )
+        padding = 20
+        viewport_rect = self.viewport().rect()
+        available_width = viewport_rect.width() - (2 * padding)
+        available_height = viewport_rect.height() - (2 * padding)
         
-        self.update_display_scale(scale)
+        if available_width <= 0 or available_height <= 0:
+            return
+            
+        # Calculate scale to fit
+        scale_x = available_width / display.width
+        scale_y = available_height / display.height
+        scale = min(scale_x, scale_y)
         
-        # Center the view on the display
-        display_center = QPointF(display.width / 2, display.height / 2)
-        self.centerOn(display_center)
+        # Apply the scale
+        self.resetTransform()
+        self.scale(scale, scale)
+        
+        # Center the display in the view
+        self.centerOn(display.width / 2, display.height / 2)
         
     def drawBackground(self, painter: QPainter, rect: QRectF):
         super().drawBackground(painter, rect)
         
-        # Draw grid
+        # Get display bounds
+        display = self.display_manager.get_selected_display()
+        if not display:
+            return
+            
+        # Only draw grid within display bounds
+        display_rect = QRectF(0, 0, display.width, display.height)
+        draw_rect = rect.intersected(display_rect)
+        
+        if draw_rect.isEmpty():
+            return
+        
         painter.setPen(self.grid_pen)
         
-        left = int(rect.left())
-        right = int(rect.right())
-        top = int(rect.top())
-        bottom = int(rect.bottom())
+        left = int(draw_rect.left())
+        right = int(draw_rect.right())
+        top = int(draw_rect.top())
+        bottom = int(draw_rect.bottom())
         
         # Draw vertical lines
         first_left = left - (left % self.grid_size)
-        for x in range(first_left, right, self.grid_size):
-            painter.drawLine(x, top, x, bottom)
+        for x in range(first_left, right + 1, self.grid_size):
+            if 0 <= x <= display.width:
+                painter.drawLine(x, max(0, top), x, min(display.height, bottom))
             
         # Draw horizontal lines
         first_top = top - (top % self.grid_size)
-        for y in range(first_top, bottom, self.grid_size):
-            painter.drawLine(left, y, right, y)
+        for y in range(first_top, bottom + 1, self.grid_size):
+            if 0 <= y <= display.height:
+                painter.drawLine(max(0, left), y, min(display.width, right), y)
             
         # Draw rulers at 100px intervals
         painter.setPen(self.ruler_pen)
         painter.setFont(QFont("Arial", 8))
         
         # Draw measurements on major grid lines (every 100px)
-        for x in range(first_left, right, 100):
-            if x >= 0:  # Only show positive coordinates
-                painter.drawLine(x, top, x, bottom)
+        for x in range(0, display.width + 1, 100):
+            if left <= x <= right:
+                painter.drawLine(x, max(0, top), x, min(display.height, bottom))
                 if x % 200 == 0:  # Show text every 200px
-                    painter.drawText(x + 2, top + 15, str(x))
+                    painter.drawText(x + 2, max(15, top + 15), str(x))
                     
-        for y in range(first_top, bottom, 100):
-            if y >= 0:  # Only show positive coordinates
-                painter.drawLine(left, y, right, y)
+        for y in range(0, display.height + 1, 100):
+            if top <= y <= bottom:
+                painter.drawLine(max(0, left), y, min(display.width, right), y)
                 if y % 200 == 0:  # Show text every 200px
-                    painter.drawText(left + 2, y - 2, str(y))
+                    painter.drawText(max(2, left + 2), y - 2, str(y))
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat(TILE_ID_MIME_TYPE):
@@ -134,15 +149,19 @@ class LayoutView(QGraphicsView):
             tile_id = bytes(event.mimeData().data(TILE_ID_MIME_TYPE)).decode()
             scene_pos = self.mapToScene(event.position().toPoint())
             
+            # Get display bounds
+            display = self.display_manager.get_selected_display()
+            if not display:
+                event.ignore()
+                return
+            
             # Snap to grid for cleaner placement
             snapped_x = round(scene_pos.x() / self.grid_size) * self.grid_size
             snapped_y = round(scene_pos.y() / self.grid_size) * self.grid_size
             
-            # Ensure drop is within display bounds
-            display = self.display_manager.get_selected_display()
-            if display:
-                snapped_x = max(0, min(snapped_x, display.width - 50))
-                snapped_y = max(0, min(snapped_y, display.height - 50))
+            # Ensure drop is within display bounds (with minimum tile size of 50x50)
+            snapped_x = max(0, min(snapped_x, display.width - 50))
+            snapped_y = max(0, min(snapped_y, display.height - 50))
             
             self.manager.add_tile_to_layout(
                 self.layout_data['id'], 
@@ -156,23 +175,9 @@ class LayoutView(QGraphicsView):
             event.ignore()
 
     def wheelEvent(self, event):
-        """Handle zoom with mouse wheel."""
-        # Get the zoom factor
-        zoom_in_factor = 1.25
-        zoom_out_factor = 1 / zoom_in_factor
-        
-        # Calculate zoom
-        if event.angleDelta().y() > 0:
-            zoom_factor = zoom_in_factor
-        else:
-            zoom_factor = zoom_out_factor
-            
-        # Limit zoom range
-        new_scale = self.display_scale * zoom_factor
-        if 0.1 <= new_scale <= 2.0:
-            self.update_display_scale(new_scale)
-            
-        event.accept()
+        """Disable zoom with mouse wheel."""
+        # Do nothing - no zooming allowed
+        event.ignore()
 
 
 class LayoutEditor(QWidget):
@@ -228,23 +233,9 @@ class LayoutEditor(QWidget):
         
         toolbar_layout.addStretch()
         
-        # Zoom controls
-        toolbar_layout.addWidget(QLabel("Zoom:"))
-        self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
-        self.zoom_slider.setRange(10, 200)  # 10% to 200%
-        self.zoom_slider.setValue(100)
-        self.zoom_slider.setFixedWidth(150)
-        self.zoom_slider.valueChanged.connect(self._on_zoom_changed)
-        toolbar_layout.addWidget(self.zoom_slider)
-        
-        self.zoom_label = QLabel("100%")
-        self.zoom_label.setFixedWidth(40)
-        toolbar_layout.addWidget(self.zoom_label)
-        
-        # Fit button
-        self.fit_button = QPushButton("Fit to View")
-        self.fit_button.clicked.connect(self._fit_display)
-        toolbar_layout.addWidget(self.fit_button)
+        # Scale info (read-only)
+        self.scale_info_label = QLabel("Scale: Fit to view")
+        toolbar_layout.addWidget(self.scale_info_label)
         
         main_layout.addLayout(toolbar_layout)
         
@@ -285,7 +276,15 @@ class LayoutEditor(QWidget):
         """Update the display information label."""
         display = self.display_manager.get_selected_display()
         if display:
-            self.display_info_label.setText(f"{display.resolution_string} @ ({display.x}, {display.y})")
+            # Show native resolution and position
+            info_text = f"Native: {display.resolution_string} @ ({display.x}, {display.y})"
+            
+            # Add DPI/scale info if significantly different from 96 DPI (standard)
+            if abs(display.dpi - 96) > 5:  # More than 5 DPI difference
+                scale_percent = int((display.dpi / 96) * 100)
+                info_text += f" | Display Scale: {scale_percent}%"
+                
+            self.display_info_label.setText(info_text)
         else:
             self.display_info_label.setText("No display selected")
             
@@ -306,63 +305,62 @@ class LayoutEditor(QWidget):
             except RuntimeError:
                 # Item was already deleted
                 pass
-            self.scene.display_info_item = None            
+            self.scene.display_info_item = None
+            
         display = self.display_manager.get_selected_display()
         if not display:
             # Set a default scene rect if no display
-            self.scene.setSceneRect(-1000, -1000, 2000, 2000)
+            self.scene.setSceneRect(0, 0, 1920, 1080)
             return
             
-        # Update scene rect to match display
-        margin = 500  # Extra space around display
-        self.scene.setSceneRect(
-            -margin, -margin,
-            display.width + 2 * margin,
-            display.height + 2 * margin
-        )        
-        # Draw display rectangle
+        # Set scene rect to exactly match display (no extra margin)
+        self.scene.setSceneRect(0, 0, display.width, display.height)
+        
+        # Draw display rectangle border
         display_rect = QRectF(0, 0, display.width, display.height)
-        pen = QPen(QColor(100, 150, 200), 3, Qt.PenStyle.DashLine)
-        brush = QBrush(QColor(50, 50, 50, 30))
+        pen = QPen(QColor(100, 150, 200), 3, Qt.PenStyle.SolidLine)
+        brush = QBrush(Qt.BrushStyle.NoBrush)  # No fill
         
         self.scene.display_rect_item = self.scene.addRect(display_rect, pen, brush)
         self.scene.display_rect_item.setZValue(-1000)  # Behind everything
         
-        # Add display info text
-        info_text = f"Display {display.index + 1}\n{display.resolution_string}"
+        # Add display info text in top-left corner
+        info_text = f"Display {display.index + 1}: {display.resolution_string}"
         self.scene.display_info_item = self.scene.addText(info_text)
         self.scene.display_info_item.setDefaultTextColor(QColor(150, 150, 150))
-        self.scene.display_info_item.setPos(10, -40)
+        font = QFont("Arial", 10)
+        self.scene.display_info_item.setFont(font)
+        self.scene.display_info_item.setPos(5, 5)
+        self.scene.display_info_item.setZValue(1000)  # On top
         
         # Fit display in view
-        self._fit_display()
-        
-    def _on_zoom_changed(self, value: int):
-        """Handle zoom slider changes."""
-        zoom_percent = value
-        self.zoom_label.setText(f"{zoom_percent}%")
-        self.view.update_display_scale(zoom_percent / 100.0)
-        
-    def _fit_display(self):
-        """Fit the display in the view."""
         self.view.fit_display_in_view()
-        # Update slider to match
-        self.zoom_slider.blockSignals(True)
-        self.zoom_slider.setValue(int(self.view.display_scale * 100))
-        self.zoom_label.setText(f"{int(self.view.display_scale * 100)}%")
-        self.zoom_slider.blockSignals(False)
 
     def on_item_moved(self, instance_id, new_pos):
         """Batch position updates for better performance."""
-        # Clamp position to display bounds
+        # Get display bounds
         display = self.display_manager.get_selected_display()
-        if display:
-            x = max(0, min(new_pos.x(), display.width - 50))
-            y = max(0, min(new_pos.y(), display.height - 50))
-            new_pos = QPointF(x, y)
+        if not display:
+            return
+            
+        # Get the item to check its size
+        item = self.item_map.get(instance_id)
+        if not item:
+            return
+            
+        # Clamp position to display bounds
+        max_x = display.width - item.width
+        max_y = display.height - item.height
+        
+        x = max(0, min(new_pos.x(), max_x))
+        y = max(0, min(new_pos.y(), max_y))
+        
+        # Update item position if it was clamped
+        if x != new_pos.x() or y != new_pos.y():
+            item.setPos(x, y)
             
         # Queue the position update
-        self.pending_position_updates[instance_id] = (new_pos.x(), new_pos.y())
+        self.pending_position_updates[instance_id] = (x, y)
         
         # Restart the timer (debounce)
         self.position_update_timer.stop()
@@ -446,14 +444,42 @@ class LayoutEditor(QWidget):
             self.manager.storage.save_data(full_app_data)
         # --- End Migration ---
 
+        # Get current display bounds
+        display = self.display_manager.get_selected_display()
+        if not display:
+            return
+
         # Create items and track them
         for instance_data in self.layout_data.get("tile_instances", []):
             tile_def = self.manager.get_tile_by_id(instance_data['tile_id'])
             if tile_def:
+                # Ensure tile is within bounds
+                x = instance_data.get('x', 0)
+                y = instance_data.get('y', 0)
+                width = instance_data.get('width', 250)
+                height = instance_data.get('height', 150)
+                
+                # Clamp to display bounds
+                x = max(0, min(x, display.width - width))
+                y = max(0, min(y, display.height - height))
+                
+                # Update instance data if position was clamped
+                if x != instance_data.get('x', 0) or y != instance_data.get('y', 0):
+                    instance_data['x'] = x
+                    instance_data['y'] = y
+                    needs_saving = True
+                
                 item = EditorTileItem(instance_data, tile_def)
+                # Set bounds constraint on the item
+                item.set_bounds(0, 0, display.width, display.height)
                 self.scene.addItem(item)
                 # Track the item
                 self.item_map[instance_data['instance_id']] = item
+                
+        # Save if any positions were clamped
+        if needs_saving:
+            self.manager.update_layout_display(self.layout_data['id'], 
+                                             self.display_manager.selected_display_index)
                 
     def showEvent(self, event):
         """Refresh when becoming visible."""
@@ -462,6 +488,13 @@ class LayoutEditor(QWidget):
         self._update_display_info()
         self._update_display_visualization()
         self.load_items()
+        
+    def resizeEvent(self, event):
+        """Handle widget resize to refit display."""
+        super().resizeEvent(event)
+        # Refit the display when the widget is resized
+        if hasattr(self, 'view'):
+            self.view.fit_display_in_view()
         
     def hideEvent(self, event):
         """Save pending changes when hiding."""

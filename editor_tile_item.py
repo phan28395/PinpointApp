@@ -48,6 +48,12 @@ class EditorTileItem(QGraphicsItem):
         self.shadow.setColor(QColor(0, 0, 0, 80))
         self.shadow.setOffset(2, 2)
         
+        # Boundary constraints
+        self.min_x = 0
+        self.min_y = 0
+        self.max_x = float('inf')
+        self.max_y = float('inf')
+        
         # Set initial position
         self.setPos(self.tile_instance_data['x'], self.tile_instance_data['y'])
         
@@ -154,6 +160,11 @@ class EditorTileItem(QGraphicsItem):
             self.update()
         event.accept()
 
+    def update_display_text(self):
+        """Update the cached display text when content changes."""
+        self._cached_display_text = self._get_display_text()
+        self.update()  # Trigger repaint
+        
     def mouseMoveEvent(self, event):
         """Called when the user moves the mouse after clicking on this item."""
         if not self.is_dragging:
@@ -169,17 +180,11 @@ class EditorTileItem(QGraphicsItem):
             new_pos.setX(round(new_pos.x() / self.grid_size) * self.grid_size)
             new_pos.setY(round(new_pos.y() / self.grid_size) * self.grid_size)
         
-        # Boundary clamping
-        if self.scene() and self.scene().views():
-            view = self.scene().views()[0]
-            visible_scene_rect = view.mapToScene(view.viewport().rect()).boundingRect()
-            item_rect = QRectF(0, 0, self.width, self.height)
-            
-            # Clamp the new position
-            new_pos.setX(max(visible_scene_rect.left(), new_pos.x()))
-            new_pos.setY(max(visible_scene_rect.top(), new_pos.y()))
-            new_pos.setX(min(new_pos.x(), visible_scene_rect.right() - item_rect.width()))
-            new_pos.setY(min(new_pos.y(), visible_scene_rect.bottom() - item_rect.height()))
+        # Apply boundary constraints
+        new_x = max(self.min_x, min(new_pos.x(), self.max_x - self.width))
+        new_y = max(self.min_y, min(new_pos.y(), self.max_y - self.height))
+        new_pos.setX(new_x)
+        new_pos.setY(new_y)
         
         # Only update position if it actually changed (important for performance)
         if new_pos != orig_pos:
@@ -209,7 +214,9 @@ class EditorTileItem(QGraphicsItem):
         
         return super().itemChange(change, value)
     
-    def update_display_text(self):
-        """Update the cached display text when content changes."""
-        self._cached_display_text = self._get_display_text()
-        self.update()  # Trigger repaint
+    def set_bounds(self, min_x, min_y, max_x, max_y):
+        """Set the boundary constraints for this item."""
+        self.min_x = min_x
+        self.min_y = min_y
+        self.max_x = max_x
+        self.max_y = max_y

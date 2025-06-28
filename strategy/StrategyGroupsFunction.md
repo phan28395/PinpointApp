@@ -21,3 +21,35 @@ This is the perfect home for functions that manage the application as a whole, b
         --- (Separator) ---
 
         Quit PinPoint
+
+# Group 2: The "Library" (Creation & Management Actions)
+
+Psychology: These actions relate to the "wellspring of potential"—the user's raw library of tiles and layouts. They are about creating, organizing, and managing the building blocks before they are used.
+
+Where they belong: The Left Sidebar of the Studio.
+
+The controls should be physically close to the lists they are manipulating.
+
+    Buttons at the Top of the Sidebar:
+
+        ＋ New Tile (opens the dialog to create a new tile definition).
+
+        ＋ New Layout (creates a new, empty layout).
+
+    Right-Click Menu on a Layout Item:
+
+        ▶️ Project this Layout
+
+        ✏️ Rename
+
+        📋 Duplicate
+
+        🗑️ Delete Layout
+
+    Right-Click Menu on a Tile Item in the Library:
+
+        ✏️ Edit in Studio
+
+        📋 Duplicate Tile
+
+        🗑️ Delete Tile Permanently

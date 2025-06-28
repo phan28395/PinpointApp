@@ -42,9 +42,14 @@ class DisplayInfo:
         
     @property
     def display_name(self) -> str:
-        primary = " (Primary)" if self.is_primary else ""
-        return f"Display {self.index + 1}: {self.resolution_string}{primary}"
+        """Returns a user-friendly name for the display, preferring the real monitor name."""
+        primary_indicator = " (Primary)" if self.is_primary else ""
         
+        # Use the real monitor name if the OS provides it, otherwise fall back to a generic name.
+        name_to_show = self.name if self.name else f"Display {self.index + 1}"
+        
+        return f"{name_to_show} ({self.resolution_string}){primary_indicator}"        
+    
     def to_dict(self) -> Dict:
         """Convert to dictionary for storage."""
         return {

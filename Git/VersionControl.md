@@ -9,3 +9,9 @@
 2) This version is bug free, ready to continue to implement the function that we can project the real resolution of desktop into the layout editor.
 3) Best Version until now. No bug. Ready for the implemetation of projecting to real resolution of monitor
 4) best version
+
+# 28.06.2025
+## Git
+
+## Plan
+

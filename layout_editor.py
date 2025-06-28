@@ -1,15 +1,28 @@
 # pinpoint/layout_editor.py
 
 import uuid
+import os
+import platform
+from enum import Enum
 from PySide6.QtWidgets import (QWidget, QGraphicsView, QGraphicsScene, QVBoxLayout, 
                               QHBoxLayout, QComboBox, QLabel, QPushButton,
-                              QGraphicsRectItem, QGraphicsTextItem)
-from PySide6.QtGui import QPen, QColor, QBrush, QPainter, QFont
-from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer
+                              QGraphicsRectItem, QGraphicsTextItem, QGraphicsPixmapItem,
+                              QApplication)
+from PySide6.QtGui import QPen, QColor, QBrush, QPainter, QFont, QPixmap, QScreen
+from PySide6.QtCore import Qt, QRectF, Signal, QPointF, QTimer, QPropertyAnimation, QEasingCurve
 from .draggable_list_widget import TILE_ID_MIME_TYPE
 from .editor_tile_item import EditorTileItem
 from .display_manager import get_display_manager
 
+
+class ArrangePattern(Enum):
+    """Patterns for auto-arranging tiles."""
+    LEAN_LEFT = "Lean Left"
+    LEAN_RIGHT = "Lean Right"
+    CENTERED = "Centered"
+    GRID = "Grid"
+    CASCADE = "Cascade"
+    
 
 class LayoutEditorScene(QGraphicsScene):
     """
@@ -23,6 +36,7 @@ class LayoutEditorScene(QGraphicsScene):
         # We'll set scene rect dynamically based on display
         self.display_rect_item = None
         self.display_info_item = None
+        self.wallpaper_item = None
 
 
 class LayoutView(QGraphicsView):
@@ -37,6 +51,7 @@ class LayoutView(QGraphicsView):
         
         # Display visualization
         self.show_display_bounds = True
+        self.show_wallpaper = True
         
         self.setAcceptDrops(True)
         self.setRenderHint(self.renderHints().Antialiasing)
@@ -50,8 +65,8 @@ class LayoutView(QGraphicsView):
         
         # Grid settings
         self.grid_size = 20
-        self.grid_pen = QPen(QColor(40, 40, 40), 1, Qt.PenStyle.SolidLine)
-        self.ruler_pen = QPen(QColor(80, 80, 80), 1, Qt.PenStyle.SolidLine)
+        self.grid_pen = QPen(QColor(40, 40, 40, 180), 1, Qt.PenStyle.SolidLine)
+        self.ruler_pen = QPen(QColor(80, 80, 80, 180), 1, Qt.PenStyle.SolidLine)
         
         # Performance optimization: cache grid drawing
         self.setCacheMode(self.CacheModeFlag.CacheBackground)
@@ -198,6 +213,10 @@ class LayoutEditor(QWidget):
         self.position_update_timer.timeout.connect(self._save_position_updates)
         self.position_update_timer.setSingleShot(True)
         
+        # Auto-arrange state
+        self.current_pattern_index = 0
+        self.arrange_patterns = list(ArrangePattern)
+        
         # Create UI
         self._create_ui()
         
@@ -233,10 +252,22 @@ class LayoutEditor(QWidget):
         
         toolbar_layout.addStretch()
         
-        # Scale info (read-only)
-        self.scale_info_label = QLabel("Scale: Fit to view")
-        toolbar_layout.addWidget(self.scale_info_label)
+        # Wallpaper toggle
+        self.wallpaper_button = QPushButton("🖼️ Wallpaper")
+        self.wallpaper_button.setCheckable(True)
+        self.wallpaper_button.setChecked(True)
+        self.wallpaper_button.toggled.connect(self._toggle_wallpaper)
+        toolbar_layout.addWidget(self.wallpaper_button)
         
+        # Auto-arrange button
+        self.arrange_button = QPushButton("✨ Auto-Arrange")
+        self.arrange_button.clicked.connect(self._auto_arrange_tiles)
+        toolbar_layout.addWidget(self.arrange_button)
+        
+        # Scale info (read-only)
+        # self.scale_info_label = QLabel("Scale: Fit to view")
+        # toolbar_layout.addWidget(self.scale_info_label)
+
         main_layout.addLayout(toolbar_layout)
         
         # Create scene and view
@@ -245,6 +276,192 @@ class LayoutEditor(QWidget):
         
         self.view = LayoutView(self.scene, self.manager, self.layout_data, self)
         main_layout.addWidget(self.view)
+        
+    def _toggle_wallpaper(self, checked):
+        """Toggle wallpaper visibility."""
+        self.view.show_wallpaper = checked
+        self._update_wallpaper()
+        
+    def _capture_display_wallpaper(self, display_index: int) -> QPixmap:
+        """Capture the wallpaper of the specified display."""
+        try:
+            screens = QApplication.screens()
+            if 0 <= display_index < len(screens):
+                screen = screens[display_index]
+                # Capture the entire screen
+                pixmap = screen.grabWindow(0)
+                return pixmap
+        except Exception as e:
+            print(f"Failed to capture wallpaper: {e}")
+        return None
+        
+    def _get_wallpaper_path(self) -> str:
+        """Get the current wallpaper path (Windows only for now)."""
+        if platform.system() == "Windows":
+            try:
+                import winreg
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
+                                   r"Control Panel\Desktop")
+                value, _ = winreg.QueryValueEx(key, "Wallpaper")
+                winreg.CloseKey(key)
+                return value
+            except:
+                pass
+        return None
+        
+    def _update_wallpaper(self):
+        """Update the wallpaper display in the scene."""
+        # Remove old wallpaper
+        if hasattr(self.scene, 'wallpaper_item') and self.scene.wallpaper_item:
+            try:
+                self.scene.removeItem(self.scene.wallpaper_item)
+            except RuntimeError:
+                pass
+            self.scene.wallpaper_item = None
+            
+        if not self.view.show_wallpaper:
+            return
+            
+        display = self.display_manager.get_selected_display()
+        if not display:
+            return
+            
+        # Try to get wallpaper
+        wallpaper_path = self._get_wallpaper_path()
+        if wallpaper_path and os.path.exists(wallpaper_path):
+            pixmap = QPixmap(wallpaper_path)
+            if not pixmap.isNull():
+                # Scale to fit display
+                scaled_pixmap = pixmap.scaled(
+                    display.width, display.height,
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                
+                # Crop to exact size
+                x = (scaled_pixmap.width() - display.width) // 2
+                y = (scaled_pixmap.height() - display.height) // 2
+                cropped = scaled_pixmap.copy(x, y, display.width, display.height)
+                
+                # Add to scene with transparency
+                self.scene.wallpaper_item = self.scene.addPixmap(cropped)
+                self.scene.wallpaper_item.setPos(0, 0)
+                self.scene.wallpaper_item.setOpacity(0.3)  # Make it subtle
+                self.scene.wallpaper_item.setZValue(-999)  # Behind display rect
+                
+    def _auto_arrange_tiles(self):
+        """Auto-arrange tiles in different patterns."""
+        if not self.item_map:
+            return
+            
+        display = self.display_manager.get_selected_display()
+        if not display:
+            return
+            
+        # Get current pattern
+        pattern = self.arrange_patterns[self.current_pattern_index]
+        
+        # Calculate positions based on pattern
+        positions = self._calculate_positions(pattern, len(self.item_map), display)
+        
+        # Animate tiles to new positions
+        for i, (instance_id, item) in enumerate(self.item_map.items()):
+            if i < len(positions):
+                new_x, new_y = positions[i]
+                # Ensure within bounds
+                new_x = max(0, min(new_x, display.width - item.width))
+                new_y = max(0, min(new_y, display.height - item.height))
+                
+                # Create animation
+                self._animate_item_to_position(item, new_x, new_y)
+                
+                # Queue position update
+                self.pending_position_updates[instance_id] = (new_x, new_y)
+        
+        # Save positions after animation
+        QTimer.singleShot(500, self._save_position_updates)
+        
+        # Update button text to show current pattern
+        self.arrange_button.setText(f"✨ {pattern.value}")
+        
+        # Cycle to next pattern
+        self.current_pattern_index = (self.current_pattern_index + 1) % len(self.arrange_patterns)
+        
+    def _calculate_positions(self, pattern: ArrangePattern, count: int, display) -> list:
+        """Calculate tile positions based on pattern."""
+        positions = []
+        padding = 20
+        
+        if pattern == ArrangePattern.LEAN_LEFT:
+            # Stack tiles on the left side
+            x = padding
+            y = padding
+            for i in range(count):
+                positions.append((x, y))
+                y += 180  # Default tile height + spacing
+                if y + 150 > display.height:
+                    y = padding
+                    x += 270  # Default tile width + spacing
+                    
+        elif pattern == ArrangePattern.LEAN_RIGHT:
+            # Stack tiles on the right side
+            x = display.width - 270  # Default tile width + padding
+            y = padding
+            for i in range(count):
+                positions.append((x, y))
+                y += 180
+                if y + 150 > display.height:
+                    y = padding
+                    x -= 270
+                    
+        elif pattern == ArrangePattern.CENTERED:
+            # Center tiles in the display
+            total_width = min(count * 270, display.width - 2 * padding)
+            tiles_per_row = max(1, total_width // 270)
+            rows = (count + tiles_per_row - 1) // tiles_per_row
+            
+            total_height = rows * 180
+            start_y = (display.height - total_height) // 2
+            
+            for i in range(count):
+                row = i // tiles_per_row
+                col = i % tiles_per_row
+                row_width = min(tiles_per_row, count - row * tiles_per_row) * 270
+                start_x = (display.width - row_width) // 2
+                
+                x = start_x + col * 270
+                y = start_y + row * 180
+                positions.append((x, y))
+                
+        elif pattern == ArrangePattern.GRID:
+            # Evenly distributed grid
+            cols = max(1, int((display.width - 2 * padding) / 270))
+            for i in range(count):
+                row = i // cols
+                col = i % cols
+                x = padding + col * ((display.width - 2 * padding) // cols)
+                y = padding + row * 180
+                positions.append((x, y))
+                
+        elif pattern == ArrangePattern.CASCADE:
+            # Windows-style cascade
+            offset = 30
+            x = padding
+            y = padding
+            for i in range(count):
+                positions.append((x, y))
+                x += offset
+                y += offset
+                if x + 250 > display.width or y + 150 > display.height:
+                    x = padding
+                    y = padding
+                    
+        return positions
+        
+    def _animate_item_to_position(self, item, x, y):
+        """Animate item to new position."""
+        # Simple position setting for now (can be enhanced with QPropertyAnimation)
+        item.setPos(x, y)
         
     def _update_display_selector(self):
         """Update the display selector combo box."""
@@ -264,29 +481,29 @@ class LayoutEditor(QWidget):
         """Handle display selection."""
         self.display_manager.select_display(index)
         self._update_display_visualization()
-        self._update_display_info()
+        #self._update_display_info()
         self.load_items()  # Reload items for new display bounds
         
     def _on_displays_changed(self):
         """Handle display configuration changes."""
         self._update_display_selector()
         self._update_display_visualization()
-        
-    def _update_display_info(self):
-        """Update the display information label."""
-        display = self.display_manager.get_selected_display()
-        if display:
-            # Show native resolution and position
-            info_text = f"Native: {display.resolution_string} @ ({display.x}, {display.y})"
+
+    # def _update_display_info(self):
+    #     """Update the display information label."""
+    #     display = self.display_manager.get_selected_display()
+    #     if display:
+    #         # Show native resolution and position
+    #         info_text = f"Native: {display.resolution_string} @ ({display.x}, {display.y})"
             
-            # Add DPI/scale info if significantly different from 96 DPI (standard)
-            if abs(display.dpi - 96) > 5:  # More than 5 DPI difference
-                scale_percent = int((display.dpi / 96) * 100)
-                info_text += f" | Display Scale: {scale_percent}%"
+    #         # Add DPI/scale info if significantly different from 96 DPI (standard)
+    #         if abs(display.dpi - 96) > 5:  # More than 5 DPI difference
+    #             scale_percent = int((display.dpi / 96) * 100)
+    #             info_text += f" | Display Scale: {scale_percent}%"
                 
-            self.display_info_label.setText(info_text)
-        else:
-            self.display_info_label.setText("No display selected")
+    #         self.display_info_label.setText(info_text)
+    #     else:
+    #         self.display_info_label.setText("No display selected")
             
     def _update_display_visualization(self):
         """Update the visual representation of the display in the scene."""
@@ -315,6 +532,9 @@ class LayoutEditor(QWidget):
             
         # Set scene rect to exactly match display (no extra margin)
         self.scene.setSceneRect(0, 0, display.width, display.height)
+        
+        # Update wallpaper
+        self._update_wallpaper()
         
         # Draw display rectangle border
         display_rect = QRectF(0, 0, display.width, display.height)
@@ -416,6 +636,8 @@ class LayoutEditor(QWidget):
             self.scene.display_rect_item = None
         if hasattr(self.scene, 'display_info_item'):
             self.scene.display_info_item = None
+        if hasattr(self.scene, 'wallpaper_item'):
+            self.scene.wallpaper_item = None
         
         # Re-add display visualization
         self._update_display_visualization()
@@ -485,7 +707,7 @@ class LayoutEditor(QWidget):
         """Refresh when becoming visible."""
         super().showEvent(event)
         # Update display info and reload items
-        self._update_display_info()
+        # self._update_display_info()
         self._update_display_visualization()
         self.load_items()
         
@@ -516,4 +738,4 @@ class LayoutEditor(QWidget):
         except:
             pass
             
-        super().closeEvent(event)
+        super

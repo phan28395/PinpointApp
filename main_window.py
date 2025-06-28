@@ -1,6 +1,5 @@
 # pinpoint/main_window.py
-from .display_manager import get_display_manager
-from PySide6.QtGui import QActionGroup
+
 import uuid
 from PySide6.QtWidgets import (QMainWindow, QLabel, QSplitter, QListWidget, 
                               QListWidgetItem, QTabWidget, QPushButton, 
@@ -9,9 +8,10 @@ from PySide6.QtWidgets import (QMainWindow, QLabel, QSplitter, QListWidget,
                               QDialog, QDialogButtonBox, QTextEdit,
                               QToolBar, QComboBox)
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon, QActionGroup
 from .layout_editor import LayoutEditor
 from .draggable_list_widget import DraggableListWidget
+from .display_manager import get_display_manager
 
 
 class NewTileDialog(QDialog):
@@ -19,7 +19,6 @@ class NewTileDialog(QDialog):
     
     def __init__(self, manager, parent=None):
         super().__init__(parent)
-        
         self.manager = manager
         self.selected_type = None
         
@@ -210,8 +209,8 @@ class TileLibraryWidget(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self, manager):
         super().__init__()
-        self.display_manager = get_display_manager()
         self.manager = manager
+        self.display_manager = get_display_manager()
         self.editors = {}
         
         self.setWindowTitle("PinPoint Studio")
@@ -386,7 +385,7 @@ class MainWindow(QMainWindow):
         item = self.layout_library_list.itemAt(position)
         if not item:
             return
-
+            
         layout_id = item.data(Qt.ItemDataRole.UserRole)
         menu = QMenu()
         
@@ -418,21 +417,12 @@ class MainWindow(QMainWindow):
         )
         
         menu.exec(self.layout_library_list.mapToGlobal(position))
-                    
-    def project_selected_layout(self):
-        """Calls the manager to show the selected layout's tiles live."""
-        selected_item = self.layout_library_list.currentItem()
-        if not selected_item:
-            return
-        layout_id = selected_item.data(Qt.ItemDataRole.UserRole)
-        print(f"Projecting layout {layout_id}...")
-        self.manager.project_layout(layout_id)
-
+        
     def project_to_display(self, layout_id: str, display_index: int):
         """Project layout to a specific display."""
         print(f"Projecting layout {layout_id} to display {display_index}")
         self.manager.project_layout(layout_id, display_index)
-
+        
     def populate_all_libraries(self):
         """Populate both layout and tile libraries."""
         self.populate_layout_library()
@@ -466,8 +456,8 @@ class MainWindow(QMainWindow):
             tooltip += f"Tiles: {len(layout_data.get('tile_instances', []))}"
             list_item.setToolTip(tooltip)
             
-            self.layout_library_list.addItem(list_item)            
-
+            self.layout_library_list.addItem(list_item)
+            
     def on_layout_item_selected(self, item):
         """Handle layout selection."""
         layout_id = item.data(Qt.ItemDataRole.UserRole)
@@ -514,7 +504,7 @@ class MainWindow(QMainWindow):
                 
                 # Trigger display update in editor
                 editor._on_display_selected(editor.display_combo.currentIndex())
-
+                
     def _on_editor_display_changed(self, layout_id: str, display_index: int):
         """Handle when user changes display in the editor."""
         # Save the display selection to the layout
@@ -529,7 +519,7 @@ class MainWindow(QMainWindow):
             if item.data(Qt.ItemDataRole.UserRole) == layout_id:
                 item.setSelected(True)
                 break
-
+        
     def on_tile_selected(self, tile_id):
         """Handle tile selection from the library."""
         if tile_id not in self.editors:

@@ -293,15 +293,24 @@ class LayoutEditor(QWidget):
         """Update the visual representation of the display in the scene."""
         # Clear old display rectangle
         if hasattr(self.scene, 'display_rect_item') and self.scene.display_rect_item:
-            self.scene.removeItem(self.scene.display_rect_item)
+            try:
+                self.scene.removeItem(self.scene.display_rect_item)
+            except RuntimeError:
+                # Item was already deleted
+                pass
             self.scene.display_rect_item = None
             
         if hasattr(self.scene, 'display_info_item') and self.scene.display_info_item:
-            self.scene.removeItem(self.scene.display_info_item)
-            self.scene.display_info_item = None
-            
+            try:
+                self.scene.removeItem(self.scene.display_info_item)
+            except RuntimeError:
+                # Item was already deleted
+                pass
+            self.scene.display_info_item = None            
         display = self.display_manager.get_selected_display()
         if not display:
+            # Set a default scene rect if no display
+            self.scene.setSceneRect(-1000, -1000, 2000, 2000)
             return
             
         # Update scene rect to match display
@@ -310,8 +319,7 @@ class LayoutEditor(QWidget):
             -margin, -margin,
             display.width + 2 * margin,
             display.height + 2 * margin
-        )
-        
+        )        
         # Draw display rectangle
         display_rect = QRectF(0, 0, display.width, display.height)
         pen = QPen(QColor(100, 150, 200), 3, Qt.PenStyle.DashLine)
@@ -404,6 +412,12 @@ class LayoutEditor(QWidget):
         # Clear existing items efficiently
         self.scene.clear()
         self.item_map.clear()
+        
+        # Clear references to deleted items
+        if hasattr(self.scene, 'display_rect_item'):
+            self.scene.display_rect_item = None
+        if hasattr(self.scene, 'display_info_item'):
+            self.scene.display_info_item = None
         
         # Re-add display visualization
         self._update_display_visualization()

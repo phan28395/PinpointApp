@@ -1,8 +1,0 @@
-# Python bytecode
-__pycache__/
-
-# Project-specific assets folder
-assets/
-
-# Plugins bytecode
-plugins/__pycache__/

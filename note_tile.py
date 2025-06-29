@@ -61,8 +61,6 @@ class NoteTileLogic:
     def get_content(self) -> str:
         """Get current content."""
         return self.content
-
-
 class NoteTile(BaseTile):
     """
     Note tile implementation using the new architecture.
@@ -86,22 +84,26 @@ class NoteTile(BaseTile):
         # Store reference to main text widget
         self.text_edit: Optional[QTextEdit] = None
         
-        # Initialize base tile
-        super().__init__(tile_data)
+        # IMPORTANT: Remove design_spec to force embedded design
+        # This ensures the text widget is created properly
+        tile_data_copy = tile_data.copy()
+        if 'design_spec' in tile_data_copy:
+            print("Removing design_spec to force embedded design")
+            del tile_data_copy['design_spec']
         
-        # If no design spec provided, use default embedded design
-        if not self.design_spec:
-            print("No design spec, creating default design")
-            self._create_default_design()
-        else:
-            print("Using design spec")
-            
+        # Initialize base tile WITHOUT design spec
+        super().__init__(tile_data_copy)
+        
+        # Always create default embedded design
+        print("Creating default embedded design")
+        self._create_default_design()
+        
         # Connect the text widget to logic
         self._connect_text_widget()
         
         # Debug: Check if text_edit was created and has content
         if self.text_edit:
-            print(f"text_edit created, current text: '{self.text_edit.toPlainText()}'")
+            print(f"text_edit created successfully, current text: '{self.text_edit.toPlainText()}'")
         else:
             print("ERROR: text_edit was not created!")
 
@@ -113,7 +115,7 @@ class NoteTile(BaseTile):
         self.text_edit = QTextEdit()
         self.text_edit.setObjectName("noteTextEdit")
         
-        # Set the content from logic
+        # Set the content from logic IMMEDIATELY
         content = self.logic.get_content()
         print(f"Setting initial content in text_edit: '{content}'")
         self.text_edit.setPlainText(content)
@@ -121,52 +123,32 @@ class NoteTile(BaseTile):
         # Apply design system styling
         self.text_edit.setStyleSheet(DesignSystem.get_text_edit_style())
         
-        # Add to content area - make sure content_layout exists
+        # Add to content area
         if hasattr(self, 'content_layout') and self.content_layout:
             self.content_layout.addWidget(self.text_edit)
-            print("text_edit added to content_layout")
+            print("text_edit added to content_layout successfully")
         else:
             print("ERROR: content_layout not found!")
-            # Try to find it
-            if hasattr(self, 'content_widget'):
-                layout = self.content_widget.layout()
-                if layout:
-                    layout.addWidget(self.text_edit)
-                    print("text_edit added to content_widget layout")
 
     def _connect_text_widget(self):
-        """Connect text widget to logic, regardless of how it was created."""
+        """Connect text widget to logic."""
         print("_connect_text_widget called")
         
-        if not self.text_edit:
-            # Try to find text edit by object name
-            self.text_edit = self.findChild(QTextEdit, "noteTextEdit")
-            print(f"Found text_edit by name: {self.text_edit is not None}")
-            
         if self.text_edit:
-            # Get content from logic
-            content = self.logic.get_content()
-            print(f"Connecting text widget, setting content: '{content}'")
-            
-            # Set the content
-            self.text_edit.setPlainText(content)
-            
             # Connect change signal
             self.text_edit.textChanged.connect(self._on_text_changed)
             print("Connected textChanged signal")
         else:
-            print("ERROR: Could not find or create text_edit widget!")
+            print("ERROR: text_edit is None in _connect_text_widget!")
 
     def _on_text_changed(self):
         """Handle text changes from UI."""
         if self.text_edit and not self.logic.is_updating:
             new_text = self.text_edit.toPlainText()
-            print(f"Text changed in UI: '{new_text[:50]}...'")
             self.logic.handle_text_change(new_text)
 
     def _on_content_change(self, tile_id: str, content: str):
         """Handle content changes from logic."""
-        print(f"Content change from logic: '{content[:50]}...'")
         self.tile_content_changed.emit(tile_id, content)
 
     def update_display_content(self, tile_data: Dict[str, Any]):
@@ -175,7 +157,6 @@ class NoteTile(BaseTile):
             return
             
         new_content = tile_data.get('content', '')
-        print(f"update_display_content called with: '{new_content[:50]}...'")
         
         # Update logic
         if self.logic.update_content_external(new_content):
@@ -187,20 +168,27 @@ class NoteTile(BaseTile):
                 
                 # Update text
                 self.text_edit.setPlainText(new_content)
-                print(f"Updated text_edit with new content")
                 
                 # Restore cursor position
                 if cursor_position <= len(new_content):
                     cursor.setPosition(cursor_position)
                     self.text_edit.setTextCursor(cursor)
 
+    def handle_action(self, action: str):
+        """Handle actions from design spec components."""
+        if action == "clear":
+            if self.text_edit:
+                self.text_edit.clear()
+        elif action == "copy":
+            if self.text_edit:
+                self.text_edit.copy()
+        elif action == "paste":
+            if self.text_edit:
+                self.text_edit.paste()
 
-"""       
-Example of how to create a note tile with a specific design.
-This shows how third-party designs would be integrated.
-class NoteTileWithDesign(NoteTile):    
-    def __init__(self, tile_data: Dict[str, Any]):
-        # Inject the design spec
-        tile_data['design_spec'] = get_note_tile_design_spec()
-        super().__init__(tile_data)
-""" 
+    def closeEvent(self, event):
+        """Ensure pending updates are sent before closing."""
+        # Stop the timer and emit any pending changes
+        self.logic.debounce_timer.stop()
+        self.logic._emit_content_change()
+        super().closeEvent(event)

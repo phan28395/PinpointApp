@@ -222,7 +222,7 @@ class NotePlugin(TilePlugin):
                 },
                 "styling": {
                     "theme": "minimal",
-                    "transparent_background": true
+                    "transparent_background": True
                 }
             }
         ]

@@ -193,13 +193,14 @@ class NoteTile(BaseTile):
                 if cursor_position <= len(new_content):
                     cursor.setPosition(cursor_position)
                     self.text_edit.setTextCursor(cursor)
-class NoteTileWithDesign(NoteTile):
-    """
-    Example of how to create a note tile with a specific design.
-    This shows how third-party designs would be integrated.
-    """
-    
+
+
+"""       
+Example of how to create a note tile with a specific design.
+This shows how third-party designs would be integrated.
+class NoteTileWithDesign(NoteTile):    
     def __init__(self, tile_data: Dict[str, Any]):
         # Inject the design spec
         tile_data['design_spec'] = get_note_tile_design_spec()
         super().__init__(tile_data)
+""" 

@@ -1,264 +1,267 @@
-# pinpoint/tray.py
+# pinpoint/tray_refactored.py
+"""
+Refactored system tray with complete separation of functionality and design.
+All visual aspects are handled by the design layer.
+"""
 
 from PySide6.QtWidgets import (QSystemTrayIcon, QMenu, QWidgetAction, QWidget, 
-                              QHBoxLayout, QSlider, QSpinBox, QLabel
-                              )
-from PySide6.QtGui import QIcon, QAction, QKeySequence, QActionGroup
+                              QHBoxLayout, QSlider, QSpinBox, QLabel,
+                              QVBoxLayout, QAction)
+from PySide6.QtGui import QIcon, QActionGroup
 from PySide6.QtCore import Qt, QSettings, Signal, QObject, QTimer
 from pathlib import Path
 import sys
+
+from .design_layer import DesignLayer
+from .widget_factory import WidgetFactory
 
 
 class PersistentMenu(QMenu):
     """A menu that stays open when actions are triggered."""
     
-    def __init__(self, parent=None, tray_instance=None):
+    def __init__(self, parent=None, design_layer=None):
         super().__init__(parent)
         self.should_stay_open = True
-        self.tray_instance = tray_instance
-        self.is_topmost_set = False
+        self.design = design_layer
         
-        # Timer to check if we need to regain top position (less aggressive)
-        self.monitor_timer = QTimer()
-        self.monitor_timer.timeout.connect(self.check_if_need_raise)
+        # Set object name for styling
+        self.setObjectName("persistent_menu")
         
-        # Single-shot timer for delayed forcing to top
-        self.force_timer = QTimer()
-        self.force_timer.setSingleShot(True)
-        self.force_timer.timeout.connect(self.force_to_top_once)
-    
+        # Timer for maintaining position
+        self.position_timer = QTimer()
+        self.position_timer.timeout.connect(self._maintain_position)
+        
     def showEvent(self, event):
-        """When menu shows, set it to topmost once."""
+        """When menu shows, apply design and start position maintenance."""
         super().showEvent(event)
-        self.force_to_top_once()
-        # Start monitoring but less aggressively (every 1 second)
-        self.monitor_timer.start(1000)
-    
+        if self.design:
+            self.design.apply_design(self)
+        self.position_timer.start(1000)  # Check every second
+        
     def hideEvent(self, event):
-        """When menu hides, stop monitoring."""
+        """When menu hides, stop position maintenance."""
         super().hideEvent(event)
-        self.monitor_timer.stop()
-        self.force_timer.stop()
-        self.is_topmost_set = False
-    
-    def check_if_need_raise(self):
-        """Check if we actually need to raise (only if not currently active)."""
+        self.position_timer.stop()
+        
+    def _maintain_position(self):
+        """Maintain menu position if needed."""
         if self.isVisible() and not self.isActiveWindow():
-            # Only raise if we've lost focus/position
-            self.force_timer.stop()
-            self.force_timer.start(50)  # Small delay to avoid flicker
-    
-    def force_to_top_once(self):
-        """Force this menu to top, but only once per call."""
-        if not self.isVisible():
-            return
+            self.raise_()
             
-        # Set topmost using Windows API (more stable than raise_())
-        try:
-            import platform
-            if platform.system() == "Windows":
-                import ctypes
-                hwnd = int(self.winId())
-                HWND_TOPMOST = -1
-                SWP_NOMOVE = 0x0002
-                SWP_NOSIZE = 0x0001
-                SWP_NOACTIVATE = 0x0010
-                SWP_SHOWWINDOW = 0x0040
-                
-                if not self.is_topmost_set:
-                    ctypes.windll.user32.SetWindowPos(
-                        hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW
-                    )
-                    self.is_topmost_set = True
-            else:
-                # Fallback for non-Windows platforms
-                if not self.is_topmost_set:
-                    self.raise_()
-                    self.is_topmost_set = True
-        except Exception:
-            # Final fallback
-            if not self.is_topmost_set:
-                self.raise_()
-                self.is_topmost_set = True
-    
     def mouseReleaseEvent(self, event):
         """Override to prevent menu from closing on action clicks."""
         action = self.actionAt(event.pos())
         if action and action.isEnabled() and self.should_stay_open:
             # Check if this action should close the menu
             if hasattr(action, 'should_close_menu') and action.should_close_menu:
-                # This action wants to close the menu
                 super().mouseReleaseEvent(event)
                 return
-            
-            # Trigger the action without closing the menu
+                
+            # Trigger the action without closing
             action.trigger()
-            # Don't call parent's mouseReleaseEvent to prevent closing
             event.accept()
-            
-            # Only force back to top if we might have lost position
-            if not self.isActiveWindow():
-                self.force_timer.stop()
-                self.force_timer.start(100)
         else:
-            # For non-layout actions or when we want normal behavior
             super().mouseReleaseEvent(event)
-    
+            
     def close_menu(self):
         """Manually close the menu."""
-        self.monitor_timer.stop()
-        self.force_timer.stop()
+        self.position_timer.stop()
         self.should_stay_open = False
         self.close()
 
 
-class OpacityWidget(QWidget):
-    """Custom widget for opacity control in the menu."""
+class OpacityControl(QWidget):
+    """Opacity control widget with no hardcoded styling."""
     
     opacity_changed = Signal(int)
     
-    def __init__(self, parent=None):
+    def __init__(self, design_layer, parent=None):
         super().__init__(parent)
+        self.design = design_layer
+        self.setObjectName("opacity_control")
+        
+        # Create structure
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 5, 20, 5)
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # Label
-        layout.addWidget(QLabel("Opacity:"))
+        self.label = QLabel()
+        self.label.setObjectName("opacity_label")
+        self.label.setText(self.design.get_text("menu.opacity", "Opacity:"))
+        layout.addWidget(self.label)
         
         # Slider
         self.slider = QSlider(Qt.Orientation.Horizontal)
-        self.slider.setRange(10, 100)  # 10% to 100%
+        self.slider.setObjectName("opacity_slider")
+        self.slider.setRange(10, 100)
         self.slider.setValue(100)
-        self.slider.setFixedWidth(100)
         layout.addWidget(self.slider)
         
         # SpinBox
         self.spinbox = QSpinBox()
+        self.spinbox.setObjectName("opacity_spinbox")
         self.spinbox.setRange(10, 100)
         self.spinbox.setValue(100)
         self.spinbox.setSuffix("%")
-        self.spinbox.setFixedWidth(60)
         layout.addWidget(self.spinbox)
         
-        # Connect slider and spinbox
+        # Connect without styling
         self.slider.valueChanged.connect(self.spinbox.setValue)
         self.spinbox.valueChanged.connect(self.slider.setValue)
         self.slider.valueChanged.connect(self.opacity_changed.emit)
 
 
 class SystemTray(QSystemTrayIcon):
-    """Enhanced system tray with advanced menu features."""
+    """System tray with complete design separation."""
     
-    def __init__(self, app, manager, main_window, parent=None):
-        super().__init__(parent)
+    def __init__(self, app, manager, main_window, design_layer: DesignLayer):
+        super().__init__()
         self.app = app
         self.manager = manager
         self.main_window = main_window
+        self.design = design_layer
+        self.factory = WidgetFactory(design_layer)
         
-        # Settings
+        # Settings (functionality, not appearance)
         self.settings = QSettings("PinPoint", "PinPoint")
         
-        # State tracking
+        # State tracking (functionality)
         self.tiles_visible = True
         self.tiles_interactive = True
         self.global_opacity = 100
-        
-        # Project menu state
         self.show_all_layouts = False
         
-        # Set icon
-        icon_path = Path(__file__).parent / "assets/icon.png"
-        self.setIcon(QIcon(str(icon_path)))
+        # Set icon from design system
+        self._set_tray_icon()
         
-        # Create menu
+        # Create menu structure (no styling)
         self.create_menu()
         
-        # Set tooltip
-        self.setToolTip("PinPoint - Click to show/hide studio")
+        # Set tooltip from design
+        self.setToolTip(self.design.get_text("tray.tooltip", "PinPoint - Click to show/hide studio"))
         
-        # Connect activation signal
+        # Connect signals (functionality only)
         self.activated.connect(self.on_activated)
         
-        # Load settings
+        # Load functional settings
         self.load_settings()
         
-        # Timer to refresh menus periodically
+        # Timer for menu updates
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.update_project_menu)
-        self.refresh_timer.start(5000)  # Refresh every 5 seconds
+        self.refresh_timer.start(5000)
+        
+    def _set_tray_icon(self):
+        """Set tray icon from design system."""
+        # Try to get icon from design system
+        icon = self.design.get_icon("tray_icon")
+        if icon.isNull():
+            # Fallback to file icon
+            icon_path = self.design.get_value("assets.tray_icon")
+            if icon_path:
+                full_path = self.design.design_path / icon_path
+                if full_path.exists():
+                    icon = QIcon(str(full_path))
+            else:
+                # Final fallback
+                icon_path = Path(__file__).parent / "assets/icon.png"
+                if icon_path.exists():
+                    icon = QIcon(str(icon_path))
+                    
+        self.setIcon(icon)
         
     def create_menu(self):
-        """Create the enhanced context menu."""
-        self.menu = PersistentMenu(tray_instance=self)
+        """Create menu structure without any styling."""
+        # Main menu
+        self.menu = PersistentMenu(design_layer=self.design)
+        self.menu.setObjectName("tray_menu")
         
-        # Project Layout submenu (also persistent)
-        self.project_menu = PersistentMenu(self.menu, tray_instance=self)
-        self.project_menu.setTitle("📐 Project Layout")
+        # Project Layout submenu
+        self.project_menu = PersistentMenu(self.menu, design_layer=self.design)
+        self.project_menu.setObjectName("project_submenu")
+        self.project_menu.setTitle(self.design.get_text("menu.project_layout", "📐 Project Layout"))
         self.menu.addMenu(self.project_menu)
         self.update_project_menu()
         
         self.menu.addSeparator()
         
-        # Show/Hide All Projected Tiles
-        self.toggle_tiles_action = QAction("👁️ Show/Hide All Tiles", self)
-        self.toggle_tiles_action.setCheckable(True)
-        self.toggle_tiles_action.setChecked(True)
-        self.toggle_tiles_action.setShortcut(QKeySequence("Ctrl+Shift+H"))
+        # Show/Hide All Tiles
+        self.toggle_tiles_action = self._create_action(
+            "toggle_tiles",
+            self.design.get_text("menu.show_hide_tiles", "👁️ Show/Hide All Tiles"),
+            checkable=True,
+            checked=True,
+            shortcut="Ctrl+Shift+H"
+        )
         self.toggle_tiles_action.triggered.connect(self.toggle_all_tiles)
         self.menu.addAction(self.toggle_tiles_action)
         
         # Make Interactive/Non-interactive
-        self.toggle_interactive_action = QAction("🖱️ Make Interactive", self)
-        self.toggle_interactive_action.setCheckable(True)
-        self.toggle_interactive_action.setChecked(True)
-        self.toggle_interactive_action.setShortcut(QKeySequence("Ctrl+Shift+I"))
+        self.toggle_interactive_action = self._create_action(
+            "toggle_interactive",
+            self.design.get_text("menu.make_interactive", "🖱️ Make Interactive"),
+            checkable=True,
+            checked=True,
+            shortcut="Ctrl+Shift+I"
+        )
         self.toggle_interactive_action.triggered.connect(self.toggle_interactive)
         self.menu.addAction(self.toggle_interactive_action)
         
-        # Switch to Another Monitor submenu (also persistent)
-        self.monitor_menu = PersistentMenu(self.menu, tray_instance=self)
-        self.monitor_menu.setTitle("🖥️ Switch Monitor")
-        self.monitor_menu.setEnabled(False)  # Will be enabled when tiles are projected
+        # Switch Monitor submenu
+        self.monitor_menu = PersistentMenu(self.menu, design_layer=self.design)
+        self.monitor_menu.setObjectName("monitor_submenu")
+        self.monitor_menu.setTitle(self.design.get_text("menu.switch_monitor", "🖥️ Switch Monitor"))
+        self.monitor_menu.setEnabled(False)
         self.menu.addMenu(self.monitor_menu)
         self.update_monitor_menu()
         
         self.menu.addSeparator()
         
         # Opacity control
-        self.opacity_widget = OpacityWidget()
-        self.opacity_widget.opacity_changed.connect(self.set_global_opacity)
+        self.opacity_widget = OpacityControl(self.design)
         opacity_action = QWidgetAction(self)
         opacity_action.setDefaultWidget(self.opacity_widget)
+        self.opacity_widget.opacity_changed.connect(self.set_global_opacity)
         self.menu.addAction(opacity_action)
         
         self.menu.addSeparator()
         
         # Start at Startup
-        self.startup_action = QAction("🚀 Start at Startup", self)
-        self.startup_action.setCheckable(True)
-        self.startup_action.setChecked(self.get_startup_enabled())
+        self.startup_action = self._create_action(
+            "start_at_startup",
+            self.design.get_text("menu.start_at_startup", "🚀 Start at Startup"),
+            checkable=True,
+            checked=self.get_startup_enabled()
+        )
         self.startup_action.triggered.connect(self.toggle_startup)
         self.menu.addAction(self.startup_action)
         
         # Settings
-        self.settings_action = QAction("⚙️ Settings...", self)
+        self.settings_action = self._create_action(
+            "settings",
+            self.design.get_text("menu.settings", "⚙️ Settings..."),
+            enabled=False  # For future implementation
+        )
         self.settings_action.triggered.connect(self.show_settings)
-        self.settings_action.setEnabled(False)  # For future implementation
-        # Mark settings as should close menu
         self.settings_action.should_close_menu = True
         self.menu.addAction(self.settings_action)
         
         self.menu.addSeparator()
         
-        # Close Menu option
-        close_action = QAction("✕ Close Menu", self)
+        # Close Menu
+        close_action = self._create_action(
+            "close_menu",
+            self.design.get_text("menu.close_menu", "✕ Close Menu")
+        )
         close_action.triggered.connect(self.menu.close_menu)
         close_action.should_close_menu = True
         self.menu.addAction(close_action)
         
         # Quit
-        quit_action = QAction("❌ Quit PinPoint", self)
+        quit_action = self._create_action(
+            "quit",
+            self.design.get_text("menu.quit", "❌ Quit PinPoint")
+        )
         quit_action.triggered.connect(self.quit_app)
         quit_action.should_close_menu = True
         self.menu.addAction(quit_action)
@@ -266,74 +269,99 @@ class SystemTray(QSystemTrayIcon):
         # Set the menu
         self.setContextMenu(self.menu)
         
+    def _create_action(self, object_name: str, text: str, **kwargs) -> QAction:
+        """Create an action with no styling."""
+        action = QAction(text, self)
+        action.setObjectName(object_name)
+        
+        # Set functional properties only
+        if 'checkable' in kwargs:
+            action.setCheckable(kwargs['checkable'])
+        if 'checked' in kwargs:
+            action.setChecked(kwargs['checked'])
+        if 'enabled' in kwargs:
+            action.setEnabled(kwargs['enabled'])
+        if 'shortcut' in kwargs:
+            action.setShortcut(kwargs['shortcut'])
+            
+        return action
+        
     def update_project_menu(self):
-        """Update the project layout submenu with expandable list."""
+        """Update project menu with layouts."""
         self.project_menu.clear()
         
         # Get all layouts
         layouts = self.manager.storage.load_data().get("layouts", [])
         
         if not layouts:
-            no_layouts_action = QAction("No layouts available", self)
-            no_layouts_action.setEnabled(False)
+            no_layouts_action = self._create_action(
+                "no_layouts",
+                self.design.get_text("menu.no_layouts", "No layouts available"),
+                enabled=False
+            )
             self.project_menu.addAction(no_layouts_action)
             return
             
-        # Sort layouts by name
+        # Sort layouts
         sorted_layouts = sorted(layouts, key=lambda x: x.get('name', ''))
         
         # Determine how many to show
         if self.show_all_layouts:
             layouts_to_show = sorted_layouts
-            expand_text = "▲ Show Less"
+            expand_text = self.design.get_text("menu.show_less", "▲ Show Less")
         else:
-            layouts_to_show = sorted_layouts[:5]  # Show first 5
-            expand_text = "▼ Show All" if len(sorted_layouts) > 5 else None
-        
+            layouts_to_show = sorted_layouts[:5]
+            expand_text = self.design.get_text("menu.show_all", "▼ Show All") if len(sorted_layouts) > 5 else None
+            
         # Add layout actions
         for layout in layouts_to_show:
-            # Get display info
             display_info = self.manager.get_layout_display_info(layout['id'])
             display_name = display_info.get("display_name", "Unknown")
             
             action_text = f"{layout['name']} → {display_name}"
-            action = QAction(action_text, self)
+            action = self._create_action(
+                f"layout_{layout['id']}",
+                action_text
+            )
             action.setData(layout['id'])
             action.triggered.connect(lambda checked, lid=layout['id']: self.quick_project_layout(lid))
             self.project_menu.addAction(action)
-        
-        # Add expand/collapse option if there are more than 5 layouts
+            
+        # Add expand/collapse option
         if len(sorted_layouts) > 5:
             self.project_menu.addSeparator()
-            expand_action = QAction(expand_text, self)
+            expand_action = self._create_action(
+                "expand_layouts",
+                expand_text
+            )
             expand_action.triggered.connect(self.toggle_layout_list)
             self.project_menu.addAction(expand_action)
             
-        # Add separator and management options
+        # Add management options
         self.project_menu.addSeparator()
         
-        # Manage Layouts option
-        manage_action = QAction("⚙️ Manage Layouts...", self)
+        manage_action = self._create_action(
+            "manage_layouts",
+            self.design.get_text("menu.manage_layouts", "⚙️ Manage Layouts...")
+        )
         manage_action.triggered.connect(self.show_main_window_and_close_menu)
         manage_action.should_close_menu = True
         self.project_menu.addAction(manage_action)
         
         # Close submenu option
-        close_submenu_action = QAction("✕ Close Menu", self)
+        close_submenu_action = self._create_action(
+            "close_submenu",
+            self.design.get_text("menu.close_menu", "✕ Close Menu")
+        )
         close_submenu_action.triggered.connect(self.project_menu.close_menu)
         close_submenu_action.should_close_menu = True
         self.project_menu.addAction(close_submenu_action)
         
-    def toggle_layout_list(self):
-        """Toggle between showing few layouts vs all layouts."""
-        self.show_all_layouts = not self.show_all_layouts
-        self.update_project_menu()
-        
     def update_monitor_menu(self):
-        """Update the monitor switch submenu."""
+        """Update monitor menu."""
         self.monitor_menu.clear()
         
-        # Create action group for exclusive selection
+        # Create action group
         monitor_group = QActionGroup(self)
         
         # Get current display
@@ -341,58 +369,65 @@ class SystemTray(QSystemTrayIcon):
         
         # Add action for each display
         for i, display in enumerate(self.manager.display_manager.displays):
-            action = QAction(display.display_name, self)
-            action.setCheckable(True)
-            action.setChecked(i == current_display_index)
+            action = self._create_action(
+                f"monitor_{i}",
+                display.display_name,
+                checkable=True,
+                checked=(i == current_display_index)
+            )
             action.setData(i)
             action.triggered.connect(lambda checked, idx=i: self.switch_to_monitor(idx))
             monitor_group.addAction(action)
             self.monitor_menu.addAction(action)
             
-        # Add close submenu option
+        # Add close option
         if self.manager.display_manager.displays:
             self.monitor_menu.addSeparator()
-            close_submenu_action = QAction("✕ Close Menu", self)
-            close_submenu_action.triggered.connect(self.monitor_menu.close_menu)
-            close_submenu_action.should_close_menu = True
-            self.monitor_menu.addAction(close_submenu_action)
+            close_action = self._create_action(
+                "close_monitor_menu",
+                self.design.get_text("menu.close_menu", "✕ Close Menu")
+            )
+            close_action.triggered.connect(self.monitor_menu.close_menu)
+            close_action.should_close_menu = True
+            self.monitor_menu.addAction(close_action)
             
+    # All functional methods remain the same
+    def toggle_layout_list(self):
+        """Toggle between showing few/all layouts."""
+        self.show_all_layouts = not self.show_all_layouts
+        self.update_project_menu()
+        
     def quick_project_layout(self, layout_id: str):
-        """Quickly project a layout from the tray menu."""
-        # Get layout's preferred display
+        """Project a layout."""
         display_info = self.manager.get_layout_display_info(layout_id)
         display_index = display_info.get("target_display", 0)
         
-        # Project the layout
         self.manager.project_layout(layout_id, display_index)
-        
-        # Enable monitor switching
         self.monitor_menu.setEnabled(True)
         self.update_monitor_menu()
-        
-        # Update interactive state
         self.update_tiles_interactive_state()
         
         # Update tooltip
         layout_data = self.manager.get_layout_by_id(layout_id)
         if layout_data:
             layout_name = layout_data.get('name', 'Layout')
-            self.setToolTip(f"PinPoint - Projecting: {layout_name}")
-        
+            tooltip = self.design.get_text("tray.tooltip_projecting", "PinPoint - Projecting: {layout}")
+            self.setToolTip(tooltip.format(layout=layout_name))
+            
     def show_main_window_and_close_menu(self):
-        """Show the main window and close all menus."""
+        """Show main window and close menus."""
         self.project_menu.close_menu()
         self.menu.close_menu()
         self.show_main_window()
         
     def show_main_window(self):
-        """Show the main window for layout management."""
+        """Show the main window."""
         self.main_window.show()
         self.main_window.raise_()
         self.main_window.activateWindow()
         
     def toggle_all_tiles(self):
-        """Show or hide all projected tiles."""
+        """Toggle visibility of all tiles."""
         self.tiles_visible = not self.tiles_visible
         
         for tile_window in self.manager.active_live_tiles.values():
@@ -401,83 +436,72 @@ class SystemTray(QSystemTrayIcon):
             else:
                 tile_window.hide()
                 
-        # Update action text
+        # Update action text from design
         if self.tiles_visible:
-            self.toggle_tiles_action.setText("👁️ Hide All Tiles")
+            text = self.design.get_text("menu.hide_all_tiles", "👁️ Hide All Tiles")
         else:
-            self.toggle_tiles_action.setText("👁️ Show All Tiles")
-            
+            text = self.design.get_text("menu.show_all_tiles", "👁️ Show All Tiles")
+        self.toggle_tiles_action.setText(text)
+        
     def toggle_interactive(self):
-        """Toggle whether tiles are interactive or click-through."""
+        """Toggle tile interactivity."""
         self.tiles_interactive = not self.tiles_interactive
         
-        # Update action text based on new state
+        # Update action text from design
         if self.tiles_interactive:
-            self.toggle_interactive_action.setText("🖱️ Make Non-interactive")
+            text = self.design.get_text("menu.make_non_interactive", "🖱️ Make Non-interactive")
             flag_value = False
         else:
-            self.toggle_interactive_action.setText("🖱️ Make Interactive")
+            text = self.design.get_text("menu.make_interactive", "🖱️ Make Interactive")
             flag_value = True
             
+        self.toggle_interactive_action.setText(text)
+        
         # Apply to all tiles
         for tile_window in self.manager.active_live_tiles.values():
             tile_window.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, flag_value)
             
     def update_tiles_interactive_state(self):
-        """Update the interactive state of newly projected tiles."""
+        """Update interactive state of tiles."""
         if not self.tiles_interactive:
             for tile_window in self.manager.active_live_tiles.values():
                 tile_window.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
                 
     def switch_to_monitor(self, display_index: int):
-        """Switch all projected tiles to another monitor."""
-        # Get the currently projected layout (if any)
+        """Switch tiles to another monitor."""
         if not self.manager.active_live_tiles:
             return
             
-        # We need to find which layout is currently projected
-        # For now, we'll re-project to the new display
-        # This is a simplified implementation
-        
-        # Clear current tiles
         self.manager.clear_live_tiles()
-        
-        # Update display selection
         self.manager.display_manager.select_display(display_index)
-        
-        # Note: In a full implementation, you'd track the current layout
-        # and re-project it to the new display
-        
         self.update_monitor_menu()
         
     def set_global_opacity(self, opacity: int):
-        """Set opacity for all projected tiles."""
+        """Set opacity for all tiles."""
         self.global_opacity = opacity
         opacity_float = opacity / 100.0
         
         for tile_window in self.manager.active_live_tiles.values():
             tile_window.setWindowOpacity(opacity_float)
             
-        # Save setting
         self.settings.setValue("global_opacity", opacity)
         
     def get_startup_enabled(self) -> bool:
-        """Check if auto-start is enabled."""
+        """Check if startup is enabled."""
         return self.settings.value("start_at_startup", False, type=bool)
         
     def toggle_startup(self):
-        """Toggle start at startup setting."""
+        """Toggle startup setting."""
         enabled = not self.get_startup_enabled()
         self.settings.setValue("start_at_startup", enabled)
         
-        # Platform-specific startup registration
         if enabled:
             self.register_startup()
         else:
             self.unregister_startup()
             
     def register_startup(self):
-        """Register the application to start at system startup."""
+        """Register for system startup."""
         import platform
         import os
         
@@ -494,10 +518,8 @@ class SystemTray(QSystemTrayIcon):
             except Exception as e:
                 print(f"Failed to register startup: {e}")
                 
-        # TODO: Add macOS and Linux support
-        
     def unregister_startup(self):
-        """Unregister the application from system startup."""
+        """Unregister from system startup."""
         import platform
         
         if platform.system() == "Windows":
@@ -513,27 +535,23 @@ class SystemTray(QSystemTrayIcon):
                 print(f"Failed to unregister startup: {e}")
                 
     def show_settings(self):
-        """Show the settings dialog (for future implementation)."""
+        """Show settings dialog."""
         # TODO: Implement settings dialog
         pass
         
     def load_settings(self):
         """Load saved settings."""
-        # Load opacity
         opacity = self.settings.value("global_opacity", 100, type=int)
         self.opacity_widget.slider.setValue(opacity)
         
     def quit_app(self):
         """Quit the application."""
-        # Notify manager about shutdown
         self.manager.on_app_quit()
-        # Quit the application
         self.app.quit()
         
     def on_activated(self, reason):
         """Handle tray icon activation."""
         if reason == self.ActivationReason.Trigger:  # Left click
-            # Toggle main window visibility
             if self.main_window.isVisible():
                 self.main_window.hide()
             else:

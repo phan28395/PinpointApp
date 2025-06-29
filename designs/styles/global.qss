@@ -1,0 +1,150 @@
+/* Global Application Styles */
+/* This file contains application-wide styles that apply to all widgets */
+
+/* Application-wide font and color settings */
+QWidget {
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    font-size: 14px;
+    color: #e0e0e0;
+}
+
+/* Tooltips */
+QToolTip {
+    background-color: #2a2a2a;
+    color: #e0e0e0;
+    border: 1px solid #14ffec;
+    padding: 6px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    background: #1a1a1a;
+    width: 12px;
+    border-radius: 6px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: #333333;
+    border-radius: 6px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #444444;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0;
+}
+
+QScrollBar:horizontal {
+    background: #1a1a1a;
+    height: 12px;
+    border-radius: 6px;
+    margin: 0;
+}
+
+QScrollBar::handle:horizontal {
+    background: #333333;
+    border-radius: 6px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #444444;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    border: none;
+    background: none;
+    width: 0;
+}
+
+/* Focus outline */
+QWidget:focus {
+    outline: none;
+}
+
+/* Disabled state */
+QWidget:disabled {
+    color: #666666;
+}
+
+/* Selection colors */
+::selection {
+    background-color: #0a9b91;
+    color: #ffffff;
+}
+
+/* Context menus */
+QMenu {
+    background-color: #2a2a2a;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+QMenu::item {
+    padding: 8px 24px;
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background-color: #303030;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #333333;
+    margin: 4px 8px;
+}
+
+/* Message boxes */
+QMessageBox {
+    background-color: #242424;
+}
+
+QMessageBox QPushButton {
+    min-width: 80px;
+    min-height: 32px;
+}
+
+/* Input dialogs */
+QInputDialog {
+    background-color: #242424;
+}
+
+/* File dialogs */
+QFileDialog {
+    background-color: #1a1a1a;
+}
+
+QFileDialog QListView,
+QFileDialog QTreeView {
+    background-color: #242424;
+    border: 1px solid #333333;
+}
+
+/* Splitters */
+QSplitter::handle {
+    background-color: #333333;
+}
+
+QSplitter::handle:hover {
+    background-color: #14ffec;
+}
+
+QSplitter::handle:horizontal {
+    width: 2px;
+}
+
+QSplitter::handle:vertical {
+    height: 2px;
+}

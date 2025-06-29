@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Type, Any, List, Optional, Tuple
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QWidget
-from ..base_tile import BaseTile
+from ..base_tile_refactored import BaseTile
 from ..design_system import DesignSystem, DesignConstraints
 
 

@@ -2,7 +2,7 @@
 
 from typing import Type, Dict, Any, List
 from .plugin_registry import TilePlugin, TileMetadata, TileCapabilities, DesignConstraints
-from ..note_tile import NoteTile, NoteTileLogic
+from ..note_tile_refactored import NoteTile, NoteTileLogic
 from ..note_editor_widget import NoteEditorWidget
 from ..design_system import ComponentType
 

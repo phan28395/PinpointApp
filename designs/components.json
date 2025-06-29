@@ -1,0 +1,304 @@
+{
+  "version": "1.0.0",
+  "components": {
+    "tile_context_menu": {
+      "id": "tile_context_menu",
+      "items": [
+        {
+          "id": "duplicate_tile",
+          "text_key": "menu.duplicate",
+          "text": "Duplicate",
+          "icon": "duplicate"
+        },
+        {
+          "id": "rename_tile",
+          "text_key": "menu.rename",
+          "text": "Rename",
+          "icon": "rename"
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "id": "change_design_tile",
+          "text_key": "menu.change_design",
+          "text": "Change Design",
+          "icon": "design",
+          "type": "submenu",
+          "items": []
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "id": "delete_tile",
+          "text_key": "menu.delete",
+          "text": "Delete",
+          "icon": "delete"
+        }
+      ]
+    },
+    
+    "layout_context_menu": {
+      "id": "layout_context_menu",
+      "items": [
+        {
+          "id": "duplicate_layout",
+          "text_key": "menu.duplicate",
+          "text": "Duplicate",
+          "icon": "duplicate"
+        },
+        {
+          "id": "rename_layout",
+          "text_key": "menu.rename",
+          "text": "Rename",
+          "icon": "rename"
+        },
+        {
+          "id": "delete_layout",
+          "text_key": "menu.delete",
+          "text": "Delete",
+          "icon": "delete"
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "id": "private_layout",
+          "text_key": "menu.private",
+          "text": "Private",
+          "icon": "lock",
+          "checkable": true
+        },
+        {
+          "type": "separator"
+        },
+        {
+          "id": "project_menu",
+          "text_key": "menu.project_to_display",
+          "text": "Project to Display",
+          "icon": "project",
+          "type": "submenu"
+        }
+      ]
+    },
+    
+    "new_tile_dialog": {
+      "id": "new_tile_dialog",
+      "title": "Create New Tile",
+      "width": 500,
+      "height": 600,
+      "layout": {
+        "type": "vertical",
+        "spacing": 16,
+        "margins": [20, 20, 20, 20],
+        "children": [
+          {
+            "type": "label",
+            "id": "dialog_title",
+            "text": "Select tile type:",
+            "properties": {
+              "font": {
+                "size": 16,
+                "weight": 600
+              }
+            }
+          },
+          {
+            "type": "tree_widget",
+            "id": "tile_type_tree",
+            "properties": {
+              "header_visible": false,
+              "min_height": 300
+            }
+          },
+          {
+            "type": "text_edit",
+            "id": "description_text",
+            "properties": {
+              "read_only": true,
+              "max_height": 120,
+              "placeholder": "Select a tile type to see its description"
+            }
+          },
+          {
+            "type": "widget",
+            "id": "dialog_buttons",
+            "layout": {
+              "type": "horizontal",
+              "spacing": 8,
+              "children": [
+                {
+                  "type": "spacer"
+                },
+                {
+                  "type": "button",
+                  "id": "cancel_button",
+                  "text": "Cancel"
+                },
+                {
+                  "type": "button",
+                  "id": "create_button",
+                  "text": "Create",
+                  "properties": {
+                    "default": true
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    
+    "tile_header_template": {
+      "id": "tile_header",
+      "layout": {
+        "type": "horizontal",
+        "spacing": 0,
+        "margins": [0, 0, 0, 0],
+        "children": [
+          {
+            "type": "frame",
+            "id": "drag_handle",
+            "properties": {
+              "stretch": 1
+            }
+          },
+          {
+            "type": "widget",
+            "id": "controls_container",
+            "layout": {
+              "type": "horizontal",
+              "spacing": 4,
+              "children": [
+                {
+                  "type": "button",
+                  "id": "pin_button",
+                  "icon": "pin"
+                },
+                {
+                  "type": "button",
+                  "id": "close_button",
+                  "icon": "close"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    
+    "plugin_preview_template": {
+      "id": "plugin_preview",
+      "layout": {
+        "type": "vertical",
+        "spacing": 16,
+        "children": [
+          {
+            "type": "widget",
+            "id": "preview_header",
+            "layout": {
+              "type": "horizontal",
+              "children": [
+                {
+                  "type": "label",
+                  "id": "plugin_name",
+                  "properties": {
+                    "font": {
+                      "size": 18,
+                      "weight": 600
+                    }
+                  }
+                },
+                {
+                  "type": "spacer"
+                },
+                {
+                  "type": "label",
+                  "id": "plugin_version",
+                  "properties": {
+                    "style": "muted"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "type": "label",
+            "id": "plugin_author",
+            "properties": {
+              "style": "secondary"
+            }
+          },
+          {
+            "type": "label",
+            "id": "plugin_description",
+            "properties": {
+              "word_wrap": true
+            }
+          },
+          {
+            "type": "frame",
+            "id": "plugin_preview_area",
+            "properties": {
+              "min_height": 200,
+              "style": "panel"
+            }
+          },
+          {
+            "type": "widget",
+            "id": "plugin_actions",
+            "layout": {
+              "type": "horizontal",
+              "spacing": 8,
+              "children": [
+                {
+                  "type": "button",
+                  "id": "install_button",
+                  "text": "Install",
+                  "properties": {
+                    "style": "primary"
+                  }
+                },
+                {
+                  "type": "button",
+                  "id": "preview_button",
+                  "text": "Preview"
+                },
+                {
+                  "type": "spacer"
+                },
+                {
+                  "type": "label",
+                  "id": "plugin_price",
+                  "properties": {
+                    "style": "accent"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  
+  "dialogs": {
+    "confirm_delete": {
+      "title": "Confirm Delete",
+      "message": "Are you sure you want to delete this item?",
+      "buttons": ["cancel", "delete"],
+      "default_button": "cancel",
+      "icon": "warning"
+    },
+    
+    "permission_request": {
+      "title": "Permission Request",
+      "message": "This plugin is requesting {permission} permission. Allow?",
+      "buttons": ["deny", "allow"],
+      "default_button": "deny",
+      "icon": "question"
+    }
+  }
+}

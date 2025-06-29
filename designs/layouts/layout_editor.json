@@ -1,0 +1,119 @@
+{
+  "editor": {
+    "grid_size": 20,
+    "grid_enabled": true,
+    "grid_color": "#282828",
+    "grid_width": 1,
+    "ruler_color": "#505050",
+    "ruler_width": 1,
+    "ruler_interval": 100,
+    "ruler_text_interval": 200,
+    "ruler_font": {
+      "family": "Arial",
+      "size": 8
+    },
+    
+    "display_padding": 20,
+    "display_border_color": "#6496c8",
+    "display_border_width": 3,
+    "display_text_color": "#969696",
+    "display_text_font": {
+      "family": "Arial",
+      "size": 10
+    },
+    
+    "snap_to_grid": true,
+    "min_tile_size": 50,
+    "position_save_delay": 100,
+    
+    "toolbar_spacing": 20,
+    "cascade_offset": 30,
+    
+    "auto_arrange_spacing": {
+      "horizontal": 20,
+      "vertical": 20
+    },
+    "arrange_padding": 20,
+    "default_tile_size": {
+      "width": 250,
+      "height": 150
+    },
+    
+    "tile_item": {
+      "colors": {
+        "normal": {
+          "fill": "#4678b4",
+          "border": "#96b4dc"
+        },
+        "hover": {
+          "fill": "#5a8cc8",
+          "border": "#b4d2fa"
+        },
+        "drag": {
+          "fill": "#6496d2",
+          "border": "#c8e6ff"
+        },
+        "selected": {
+          "fill": "#78aae6",
+          "border": "#dcf0ff"
+        }
+      },
+      "border_width": 2,
+      "corner_radius": 8,
+      "bounding_padding": 5,
+      
+      "shadow": {
+        "enabled": true,
+        "color": "#000000",
+        "opacity": 0.3,
+        "offset": {
+          "x": 2,
+          "y": 2
+        },
+        "blur": 0
+      },
+      
+      "font": {
+        "family": "Arial",
+        "size": 12,
+        "weight": "normal"
+      },
+      "text_color": "#ffffff",
+      "text_padding": 10,
+      "text_align": "center",
+      "max_text_chars": 30,
+      
+      "resize_handle_size": 15,
+      "resize_handle_margin": 5,
+      "resize_handle_color": "#ffffff",
+      "resize_margin": 25,
+      
+      "drag_opacity": 0.7,
+      "min_size": {
+        "width": 100,
+        "height": 80
+      }
+    }
+  },
+  
+  "texts": {
+    "editor.select_all": "Select All",
+    "editor.display": "Display:",
+    "editor.no_display": "No display selected",
+    "editor.display_info": "Native: {resolution} @ ({x}, {y})",
+    "editor.display_scale": " | Display Scale: {scale}%",
+    "editor.display_label": "Display {index}: {resolution}",
+    "editor.show_grid": "Show Grid",
+    "editor.snap_to_grid": "Snap to Grid",
+    "editor.auto_arrange": "✨ Auto-Arrange",
+    "editor.project": "▶️ Project",
+    "editor.project_default": "Project as Default",
+    "editor.project_to": "Project to {display}",
+    
+    "editor.pattern_lean left": "Lean Left",
+    "editor.pattern_lean right": "Lean Right", 
+    "editor.pattern_centered": "Centered",
+    "editor.pattern_grid": "Grid",
+    "editor.pattern_cascade": "Cascade"
+  }
+}

@@ -1,0 +1,99 @@
+"system_tray_menu": {
+    "default": "QMenu { background-color: #2a2a2a; border: 1px solid #333333; border-radius: 8px; padding: 4px; }"
+  },
+  
+  "layout_editor": {
+    "default": "QWidget#layout_editor { background-color: #1a1a1a; }"
+  },
+  
+  "layout_editor_toolbar": {
+    "default": "QWidget#layout_editor_toolbar { background-color: #242424; border-bottom: 1px solid #333333; padding: 8px; }"
+  },
+  
+  "layout_editor_toolbar2": {
+    "default": "QWidget#layout_editor_toolbar2 { background-color: #242424; border-bottom: 1px solid #333333; padding: 8px; }"
+  },
+  
+  "layout_editor_view": {
+    "default": "QGraphicsView#layout_editor_view { background-color: #1a1a1a; border: none; }"
+  },
+  
+  "toolbar_left": {
+    "default": "QWidget#toolbar_left { background-color: transparent; }"
+  },
+  
+  "toolbar_right": {
+    "default": "QWidget#toolbar_right { background-color: transparent; }"
+  },{
+  "main_sidebar": {
+    "default": "QWidget#main_sidebar { background-color: #1a1a1a; border-right: 1px solid #333333; }"
+  },
+  
+  "editor_btn": {
+    "default": "QPushButton#editor_btn { background-color: #2a2a2a; border: none; color: #888; font-size: 24px; padding: 10px; } QPushButton#editor_btn:hover { background-color: #3a3a3a; color: #fff; } QPushButton#editor_btn:checked { background-color: #0d7377; color: #fff; border-left: 3px solid #14ffec; }"
+  },
+  
+  "library_btn": {
+    "default": "QPushButton#library_btn { background-color: #2a2a2a; border: none; color: #888; font-size: 24px; padding: 10px; } QPushButton#library_btn:hover { background-color: #3a3a3a; color: #fff; } QPushButton#library_btn:checked { background-color: #0d7377; color: #fff; border-left: 3px solid #14ffec; }"
+  },
+  
+  "marketplace_btn": {
+    "default": "QPushButton#marketplace_btn { background-color: #2a2a2a; border: none; color: #888; font-size: 24px; padding: 10px; } QPushButton#marketplace_btn:hover { background-color: #3a3a3a; color: #fff; } QPushButton#marketplace_btn:disabled { color: #444; }"
+  },
+  
+  "tile_library_tree": {
+    "default": "QTreeWidget#tile_library_tree { background-color: transparent; padding: 8px; }"
+  },
+  
+  "layout_library_list": {
+    "default": "QListWidget#layout_library_list { background-color: transparent; padding: 8px; }"
+  },
+  
+  "content_placeholder": {
+    "default": "QLabel#content_placeholder { color: #666; font-size: 16px; padding: 40px; }"
+  },
+  
+  "tile_container_note": {
+    "default": "QFrame#tile_container_note { background-color: rgba(40, 40, 40, 0.9); border-radius: 8px; }"
+  },
+  
+  "tile_container_clock": {
+    "default": "QFrame#tile_container_clock { background-color: rgba(30, 30, 50, 0.9); border-radius: 8px; }"
+  },
+  
+  "tile_container_weather": {
+    "default": "QFrame#tile_container_weather { background-color: rgba(40, 50, 60, 0.9); border-radius: 8px; }"
+  },
+  
+  "tile_drag_handle": {
+    "default": "QFrame#tile_drag_handle { background-color: transparent; border-bottom: 1px solid rgba(255, 255, 255, 0.1); } QFrame#tile_drag_handle:hover { background-color: rgba(255, 255, 255, 0.05); }"
+  },
+  
+  "tile_pin_button": {
+    "default": "QPushButton#tile_pin_button { background-color: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.5); border-radius: 12px; font-size: 12px; padding: 4px; border: none; } QPushButton#tile_pin_button:hover { background-color: rgba(255, 255, 255, 0.2); color: white; } QPushButton#tile_pin_button[pinned=\"true\"] { background-color: #14ffec; color: #1a1a1a; }"
+  },
+  
+  "tile_close_button": {
+    "default": "QPushButton#tile_close_button { background-color: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.5); border-radius: 12px; font-size: 12px; padding: 4px; border: none; } QPushButton#tile_close_button:hover { background-color: #f87171; color: white; }"
+  },
+  
+  "dialog_buttons": {
+    "default": "QWidget#dialog_buttons { background-color: #242424; border-top: 1px solid #333333; padding: 16px; }"
+  },
+  
+  "dialog_button_ok": {
+    "default": "QPushButton#dialog_button_ok { background-color: #14ffec; color: #1a1a1a; padding: 8px 24px; border-radius: 4px; font-weight: 500; } QPushButton#dialog_button_ok:hover { background-color: #00e5d6; }"
+  },
+  
+  "dialog_button_cancel": {
+    "default": "QPushButton#dialog_button_cancel { background-color: #333333; color: #e0e0e0; padding: 8px 24px; border-radius: 4px; } QPushButton#dialog_button_cancel:hover { background-color: #444444; }"
+  },
+  
+  "layout_editor_view": {
+    "default": "QGraphicsView { background-color: #1a1a1a; border: none; }"
+  },
+  
+  "system_tray_menu": {
+    "default": "QMenu { background-color: #2a2a2a; border: 1px solid #333333; border-radius: 8px; padding: 4px; }"
+  }
+}

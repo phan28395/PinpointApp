@@ -1,0 +1,212 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "name": "PinPoint Default Design",
+    "author": "Design Team",
+    "description": "Default visual design for PinPoint",
+    "created": "2024-01-01",
+    "modified": "2024-01-01"
+  },
+  
+  "constants": {
+    "colors": {
+      "bg_primary": "#1a1a1a",
+      "bg_secondary": "#242424",
+      "bg_tertiary": "#2a2a2a",
+      "bg_hover": "#303030",
+      "bg_selected": "#0d7377",
+      
+      "text_primary": "#e0e0e0",
+      "text_secondary": "#999999",
+      "text_muted": "#666666",
+      "text_inverse": "#1a1a1a",
+      
+      "accent": "#14ffec",
+      "accent_hover": "#00e5d6",
+      "accent_muted": "#0a9b91",
+      
+      "success": "#4ade80",
+      "success_hover": "#22c55e",
+      
+      "warning": "#fbbf24",
+      "warning_hover": "#f59e0b",
+      
+      "error": "#f87171",
+      "error_hover": "#ef4444",
+      
+      "border_subtle": "#333333",
+      "border_strong": "#555555",
+      
+      "transparent": "transparent"
+    },
+    
+    "spacing": {
+      "none": 0,
+      "xs": 8,
+      "sm": 16,
+      "md": 24,
+      "lg": 32,
+      "xl": 40,
+      "xxl": 48
+    },
+    
+    "radius": {
+      "none": 0,
+      "sm": 4,
+      "md": 8,
+      "lg": 12,
+      "xl": 16,
+      "round": 9999
+    },
+    
+    "fonts": {
+      "default": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+      "mono": "'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', monospace",
+      "display": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
+    },
+    
+    "font_sizes": {
+      "xs": 11,
+      "sm": 13,
+      "md": 14,
+      "lg": 16,
+      "xl": 20,
+      "xxl": 24,
+      "title": 32
+    },
+    
+    "transitions": {
+      "fast": "all 0.15s ease-in-out",
+      "normal": "all 0.25s ease-in-out",
+      "slow": "all 0.35s ease-in-out"
+    },
+    
+    "shadows": {
+      "none": "none",
+      "sm": "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+      "md": "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+      "lg": "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+      "xl": "0 20px 25px -5px rgba(0, 0, 0, 0.1)"
+    }
+  },
+  
+  "properties": {
+    "_classes": {
+      "QPushButton": {
+        "cursor": "PointingHandCursor"
+      },
+      "QComboBox": {
+        "cursor": "PointingHandCursor"
+      }
+    },
+    
+    "main_sidebar": {
+      "fixed_size": {
+        "width": 60,
+        "height": -1
+      }
+    },
+    
+    "icon_button": {
+      "fixed_size": {
+        "width": 60,
+        "height": 60
+      }
+    },
+    
+    "tile_library_tree": {
+      "min_size": {
+        "width": 200,
+        "height": 200
+      }
+    },
+    
+    "layout_library_list": {
+      "min_size": {
+        "width": 200,
+        "height": 150
+      }
+    },
+    
+    "tile_container": {
+      "min_size": {
+        "width": 100,
+        "height": 80
+      }
+    },
+    
+    "tile_drag_handle": {
+      "fixed_height": 24,
+      "cursor": "SizeAllCursor"
+    },
+    
+    "tile_pin_button": {
+      "fixed_size": {
+        "width": 24,
+        "height": 24
+      }
+    },
+    
+    "tile_close_button": {
+      "fixed_size": {
+        "width": 24,
+        "height": 24
+      }
+    }
+  },
+  
+  "assets": {
+    "icons": {
+      "editor": "text:📝",
+      "library": "text:📚",
+      "marketplace": "text:🛍️",
+      "account": "text:👤",
+      "settings": "text:⚙️",
+      "close": "text:✕",
+      "pin": "text:📌",
+      "add": "text:➕",
+      "duplicate": "text:📋",
+      "rename": "text:✏️",
+      "delete": "text:🗑️",
+      "project": "text:▶️",
+      "layout": "text:📐",
+      "display": "text:🖥️",
+      "opacity": "text:👁️",
+      "interactive": "text:🖱️",
+      "startup": "text:🚀",
+      "quit": "text:❌",
+      "menu_close": "text:✕",
+      "note": "text:📝",
+      "clock": "text:🕐",
+      "weather": "text:🌤️",
+      "todo": "text:✅"
+    },
+    
+    "images": {},
+    
+    "fonts": []
+  },
+  
+  "texts": {
+    "window_title": "PinPoint Studio",
+    "placeholder.select_item": "Select an item to edit",
+    "button.ok": "OK",
+    "button.cancel": "Cancel",
+    "button.apply": "Apply",
+    "button.save": "Save",
+    "button.close": "Close",
+    "menu.project_layout": "📐 Project Layout",
+    "menu.show_hide_tiles": "👁️ Show/Hide All Tiles",
+    "menu.make_interactive": "🖱️ Make Interactive",
+    "menu.switch_monitor": "🖥️ Switch Monitor",
+    "menu.opacity": "Opacity:",
+    "menu.start_at_startup": "🚀 Start at Startup",
+    "menu.settings": "⚙️ Settings...",
+    "menu.close_menu": "✕ Close Menu",
+    "menu.quit": "❌ Quit PinPoint"
+  },
+  
+  "includes": [
+    "layouts/layout_editor.json"
+  ]
+}

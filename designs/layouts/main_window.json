@@ -1,0 +1,62 @@
+{
+  "type": "horizontal",
+  "spacing": 0,
+  "margins": [0, 0, 0, 0],
+  "children": [
+    {
+      "id": "main_sidebar",
+      "type": "widget",
+      "properties": {
+        "fixed_width": 60
+      }
+    },
+    {
+      "id": "content_area",
+      "type": "widget",
+      "stretch": 1,
+      "layout": {
+        "type": "horizontal",
+        "spacing": 0,
+        "margins": [0, 0, 0, 0],
+        "children": [
+          {
+            "id": "left_panel",
+            "type": "widget",
+            "properties": {
+              "min_width": 250,
+              "max_width": 400
+            },
+            "layout": {
+              "type": "vertical",
+              "spacing": 0,
+              "margins": [0, 0, 0, 0],
+              "children": [
+                {
+                  "id": "left_panel_content",
+                  "type": "stacked"
+                }
+              ]
+            }
+          },
+          {
+            "id": "central_content",
+            "type": "widget",
+            "stretch": 1,
+            "layout": {
+              "type": "vertical",
+              "spacing": 0,
+              "margins": [0, 0, 0, 0],
+              "children": [
+                {
+                  "id": "central_stack",
+                  "type": "stacked",
+                  "stretch": 1
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

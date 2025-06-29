@@ -1,5 +1,5 @@
 from .plugin_registry import TilePlugin, TileMetadata
-from ..base_tile import BaseTile
+from ..base_tile_refactored import BaseTile
 
 class ClockPlugin(TilePlugin):
     @classmethod

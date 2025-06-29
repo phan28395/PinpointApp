@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-
 class StorageManager:
     """Manages persistence of all application data to a JSON file."""
 

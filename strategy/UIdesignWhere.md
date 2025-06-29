@@ -9,3 +9,5 @@ Quick Cheatsheet
     Want to change how tiles look inside the editor? -> editor_tile_item.py
 
     Want to change how the final live tiles look? -> note_plugin.py (in ConfigurableNoteTile)
+
+    

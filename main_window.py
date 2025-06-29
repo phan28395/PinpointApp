@@ -1,5 +1,5 @@
 # pinpoint/main_window.py
-
+from PySide6.QtWidgets import QDialog, QMessageBox, QInputDialog
 import uuid
 from PySide6.QtWidgets import (QMainWindow, QLabel, QSplitter, QListWidget, 
                               QListWidgetItem, QTabWidget, QPushButton, 
@@ -7,14 +7,21 @@ from PySide6.QtWidgets import (QMainWindow, QLabel, QSplitter, QListWidget,
                               QTreeWidget, QTreeWidgetItem, QHBoxLayout,
                               QDialog, QDialogButtonBox, QTextEdit, QLineEdit,
                               QToolBar, QComboBox, QButtonGroup,
-                              QMessageBox, QInputDialog, QCheckBox)
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QAction, QIcon,QActionGroup
+                              QMessageBox, QInputDialog, QCheckBox, QFrame)
+from PySide6.QtCore import Qt, Signal, QSize, QMimeData, QByteArray
+from PySide6.QtGui import QAction, QIcon,QActionGroup, QDrag
 from .layout_editor import LayoutEditor
 from .draggable_list_widget import DraggableListWidget
 from .display_manager import get_display_manager
-
-
+from PySide6.QtGui import QDrag
+from .design_system import DesignSystem, spacing, color
+# Design constants from the design system
+COLORS = DesignSystem.COLORS
+SPACING_XS = DesignSystem.SPACING['xs']
+SPACING_SM = DesignSystem.SPACING['sm']
+SPACING_MD = DesignSystem.SPACING['md']
+SPACING_LG = DesignSystem.SPACING['lg']
+SPACING_XL = DesignSystem.SPACING['xl']
 class IconButton(QPushButton):
     """Custom button for sidebar navigation."""
     def __init__(self, icon_text, tooltip, parent=None):
@@ -25,21 +32,20 @@ class IconButton(QPushButton):
         self.setFixedHeight(60)
         self.setStyleSheet("""
             QPushButton {
-                background-color: transparent; /* Make the default background transparent */
+                background-color: #2a2a2a;
                 border: none;
-                color: #888; /* Keep the inactive icon color subtle */
+                color: #888;
                 font-size: 24px;
-                border-radius: 5px; /* Add a slight rounding to the hover effect */
+                padding: 10px;
             }
             QPushButton:hover {
-                background-color: #3a3a3a; /* A subtle highlight on hover */
-                color: #eee;
+                background-color: #3a3a3a;
+                color: #fff;
             }
             QPushButton:checked {
-                background-color: #454545; /* A slightly lighter grey to show selection */
-                color: white; /* Make the selected icon bright white */
-                /* The border creates a strong, clear indicator of the active panel */
-                border-left: 3px solid #0098f4; /* A professional, calm blue accent */
+                background-color: #0d7377;
+                color: #fff;
+                border-left: 3px solid #14ffec;
             }
         """)
 
@@ -115,9 +121,74 @@ class NewTileDialog(QDialog):
                 desc += f"\n\nCapabilities: {', '.join(metadata.capabilities)}"
             self.description_text.setPlainText(desc)
 
+class DraggableTileTree(QTreeWidget):
+    """Tree widget that supports dragging tiles with proper MIME data."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Enable drag but not drop
+        self.setDragEnabled(True)
+        self.setAcceptDrops(False)
+        self.setDragDropMode(QTreeWidget.DragDropMode.DragOnly)
+        self.setDefaultDropAction(Qt.DropAction.CopyAction)
+        
+    def mimeTypes(self):
+        """Return the MIME types we support for dragging."""
+        # Import the MIME type from draggable_list_widget
+        return ["application/x-pinpoint-tile-id"]
+        
+    def mimeData(self, items):
+        """Create MIME data for the dragged items."""
+        if not items:
+            return None
+            
+        # Get the first item (single selection)
+        item = items[0]
+        
+        # Check if it's a tile (not a folder or category)
+        item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        if item_type != "tile":
+            return None
+            
+        # Get the tile ID
+        tile_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if not tile_id:
+            return None
+            
+        # Create MIME data
+        mime_data = QMimeData()
+        # Set the tile ID as bytes
+        mime_data.setData("application/x-pinpoint-tile-id", tile_id.encode('utf-8'))
+        
+        # Also set text for debugging
+        mime_data.setText(tile_id)
+        
+        return mime_data
+        
+    def startDrag(self, supportedActions):
+        """Start the drag operation with our custom MIME data."""
+        # Get selected items
+        items = self.selectedItems()
+        if not items:
+            return
+            
+        # Create MIME data
+        mime_data = self.mimeData(items)
+        if not mime_data:
+            return
+            
+        # Create and execute the drag
+        drag = QDrag(self)
+        drag.setMimeData(mime_data)
+        
+        # Optional: Set a drag pixmap here
+        # drag.setPixmap(...)
+        
+        # Execute the drag
+        drag.exec(Qt.DropAction.CopyAction)
 
 class TileLibraryWidget(QWidget):
-    """Enhanced tile library with categorization and folder support."""
+    """Enhanced tile library with categorization and clean design."""
     
     tile_selected = Signal(str)  # tile_id
     
@@ -129,39 +200,198 @@ class TileLibraryWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         
-        # Top toolbar for tile operations
-        toolbar_layout = QHBoxLayout()
-        toolbar_layout.setContentsMargins(5, 5, 5, 5)
+        # Header section
+        header_widget = QWidget()
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(SPACING_SM, SPACING_SM, SPACING_SM, SPACING_SM)
         
-        self.new_folder_btn = QPushButton("📁 New Folder")
-        self.new_folder_btn.clicked.connect(self._create_folder)
-        toolbar_layout.addWidget(self.new_folder_btn)
-        
-        self.new_tile_btn = QPushButton("➕ New Tile")
+        self.new_tile_btn = QPushButton("New Tile")
+        self.new_tile_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.new_tile_btn.clicked.connect(self._create_tile)
-        toolbar_layout.addWidget(self.new_tile_btn)
+        self.new_tile_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {COLORS['accent']};
+                color: {COLORS['bg_primary']};
+                border: none;
+                padding: {SPACING_XS}px {SPACING_SM}px;
+                border-radius: {SPACING_XS // 2}px;
+                font-weight: 500;
+                font-size: 13px;
+            }}
+            QPushButton:hover {{
+                background-color: {COLORS['accent_hover']};
+            }}
+            QPushButton:pressed {{
+                background-color: {COLORS['bg_selected']};
+            }}
+        """)
+        header_layout.addWidget(self.new_tile_btn)
+        header_layout.addStretch()
         
-        toolbar_layout.addStretch()
+        layout.addWidget(header_widget)
         
-        layout.addLayout(toolbar_layout)
+        # Subtle separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setStyleSheet(f"background-color: {COLORS['border_subtle']}; max-height: 1px;")
+        layout.addWidget(separator)
         
-        # Tree widget for folders and tiles
-        self.tree = QTreeWidget()
+        # Use the custom draggable tree widget
+        self.tree = DraggableTileTree()
         self.tree.setHeaderHidden(True)
-        self.tree.setDragDropMode(QTreeWidget.DragDropMode.InternalMove)
+        self.tree.setFrameShape(QFrame.Shape.NoFrame)
+        self.tree.setRootIsDecorated(False)
+        self.tree.setIndentation(SPACING_SM)
+        
+        # Set selection mode
+        self.tree.setSelectionMode(QTreeWidget.SelectionMode.SingleSelection)
+        
+        # Connect signals
         self.tree.itemClicked.connect(self._on_item_clicked)
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
+        
+        # Apply styling
+        self.tree.setStyleSheet(f"""
+            QTreeWidget {{
+                background-color: transparent;
+                border: none;
+                outline: none;
+            }}
+            QTreeWidget::item {{
+                padding: {SPACING_XS}px;
+                border-radius: {SPACING_XS // 2}px;
+                color: {COLORS['text_primary']};
+            }}
+            QTreeWidget::item:hover {{
+                background-color: {COLORS['bg_hover']};
+            }}
+            QTreeWidget::item:selected {{
+                background-color: {COLORS['bg_selected']};
+                color: {COLORS['accent']};
+            }}
+            QTreeWidget::branch {{
+                background-color: transparent;
+            }}
+        """)
+        
         layout.addWidget(self.tree)
-        
         self.populate_tree()
+
+    def _create_tile(self):
+        """Create a new tile with enhanced dialog."""
+        dialog = NewTileDialog(self.manager, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_type:
+            self.manager.create_new_tile_definition(dialog.selected_type)
+            self.populate_tree()
+
+    def _on_item_clicked(self, item, column):
+        """Handle item selection."""
+        item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        if item_type == "tile":
+            tile_id = item.data(0, Qt.ItemDataRole.UserRole)
+            self.tile_selected.emit(tile_id)
+
+    def _show_context_menu(self, position):
+        """Show context menu with clean styling."""
+        item = self.tree.itemAt(position)
+        if not item:
+            return
+            
+        item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        if item_type != "tile":
+            return
+            
+        menu = QMenu()
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {COLORS['bg_tertiary']};
+                border: 1px solid {COLORS['border_subtle']};
+                border-radius: {SPACING_XS}px;
+                padding: {SPACING_XS // 2}px;
+            }}
+            QMenu::item {{
+                padding: {SPACING_XS}px {SPACING_SM}px;
+                border-radius: {SPACING_XS // 2}px;
+                color: {COLORS['text_primary']};
+            }}
+            QMenu::item:selected {{
+                background-color: {COLORS['bg_hover']};
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background-color: {COLORS['border_subtle']};
+                margin: {SPACING_XS // 2}px {SPACING_XS}px;
+            }}
+        """)
         
+        # Standard actions
+        duplicate_action = menu.addAction("📋 Duplicate")
+        duplicate_action.triggered.connect(lambda: self._duplicate_item(item))
+        
+        rename_action = menu.addAction("✏️ Rename")
+        rename_action.triggered.connect(lambda: self._rename_item(item))
+        
+        menu.addSeparator()
+        
+        delete_action = menu.addAction("🗑️ Delete")
+        delete_action.triggered.connect(lambda: self._delete_item(item))
+        
+        menu.exec(self.tree.mapToGlobal(position))
+
+    def _duplicate_item(self, item):
+        """Duplicate a tile."""
+        tile_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if tile_id:
+            self.manager.duplicate_tile(tile_id)
+            self.populate_tree()
+
+    def _rename_item(self, item):
+        """Rename a tile."""
+        old_name = item.text(0)
+        # Remove icon from name if present
+        if ' ' in old_name and len(old_name) > 0:
+            # Assume first part might be an emoji/icon
+            parts = old_name.split(' ', 1)
+            if len(parts) > 1:
+                old_name = parts[1]
+        
+        name, ok = QInputDialog.getText(self, "Rename", "New name:", text=old_name)
+        if ok and name:
+            # For now, just update the display name
+            # In a full implementation, you'd save this to the tile data
+            tile_id = item.data(0, Qt.ItemDataRole.UserRole)
+            if tile_id:
+                # Update the tile's display name in storage
+                tile_data = self.manager.get_tile_by_id(tile_id)
+                if tile_data:
+                    # Store the custom name in tile data
+                    tile_data['custom_name'] = name
+                    # Save through manager
+                    self.manager._cache_dirty = True
+                    self.manager._save_cached_data()
+                    # Refresh the tree
+                    self.populate_tree()
+
+    def _delete_item(self, item):
+        """Delete a tile with styled confirmation."""
+        reply = QMessageBox.question(
+            self, 
+            "Delete Tile", 
+            "Are you sure you want to delete this tile?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            tile_id = item.data(0, Qt.ItemDataRole.UserRole)
+            if tile_id:
+                self.manager.delete_tile(tile_id)
+                self.populate_tree()
     def populate_tree(self):
         """Populate the tree with folders and tiles."""
         self.tree.clear()
         
-        # For now, show all tiles in a flat structure
-        # TODO: Implement folder structure in storage
+        # Show all tiles
         all_tiles = self.manager.get_all_tile_data()
         
         for tile_data in all_tiles:
@@ -177,111 +407,21 @@ class TileLibraryWidget(QWidget):
                 item_text = f"{metadata.icon} {item_text}"
                 
             tree_item = QTreeWidgetItem([item_text])
+            
+            # Store the tile ID and type in the item data
             tree_item.setData(0, Qt.ItemDataRole.UserRole, tile_data['id'])
             tree_item.setData(0, Qt.ItemDataRole.UserRole + 1, "tile")
             tree_item.setData(0, Qt.ItemDataRole.UserRole + 2, tile_type)
             
-            # Add tooltip
+            # Make the item draggable
+            tree_item.setFlags(tree_item.flags() | Qt.ItemFlag.ItemIsDragEnabled)
+            
+            # Add tooltip with clean formatting
             if metadata:
-                tooltip = f"Type: {metadata.name}\nCategory: {metadata.category}"
+                tooltip = f"{metadata.name} • {metadata.category}"
                 tree_item.setToolTip(0, tooltip)
                 
             self.tree.addTopLevelItem(tree_item)
-            
-    def _create_folder(self):
-        """Create a new folder."""
-        name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
-        if ok and name:
-            # TODO: Implement folder creation in storage
-            folder_item = QTreeWidgetItem([f"📁 {name}"])
-            folder_item.setData(0, Qt.ItemDataRole.UserRole + 1, "folder")
-            self.tree.addTopLevelItem(folder_item)
-            
-    def _create_tile(self):
-        """Create a new tile."""
-        dialog = NewTileDialog(self.manager, self)
-        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.selected_type:
-            self.manager.create_new_tile_definition(dialog.selected_type)
-            self.populate_tree()
-            
-    def _on_item_clicked(self, item, column):
-        """Handle item selection."""
-        item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
-        if item_type == "tile":
-            tile_id = item.data(0, Qt.ItemDataRole.UserRole)
-            self.tile_selected.emit(tile_id)
-            
-    def _show_context_menu(self, position):
-        """Show context menu for tiles/folders."""
-        item = self.tree.itemAt(position)
-        if not item:
-            return
-            
-        item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
-        menu = QMenu()
-        
-        # Standard actions
-        duplicate_action = menu.addAction("📋 Duplicate")
-        duplicate_action.triggered.connect(lambda: self._duplicate_item(item))
-        
-        rename_action = menu.addAction("✏️ Rename")
-        rename_action.triggered.connect(lambda: self._rename_item(item))
-        
-        delete_action = menu.addAction("🗑️ Delete")
-        delete_action.triggered.connect(lambda: self._delete_item(item))
-        
-        menu.addSeparator()
-        
-        # Private checkbox
-        private_action = menu.addAction("🔒 Private")
-        private_action.setCheckable(True)
-        # TODO: Implement privacy settings
-        
-        # Type-specific actions
-        if item_type == "tile":
-            tile_type = item.data(0, Qt.ItemDataRole.UserRole + 2)
-            metadata = self.manager.registry.get_metadata(tile_type)
-            if metadata and "can_edit" in metadata.capabilities:
-                menu.addSeparator()
-                edit_action = menu.addAction("📝 Edit")
-                edit_action.triggered.connect(lambda: self._edit_tile(item))
-                
-        menu.exec(self.tree.mapToGlobal(position))
-        
-    def _duplicate_item(self, item):
-        """Duplicate a tile or folder."""
-        item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
-        if item_type == "tile":
-            tile_id = item.data(0, Qt.ItemDataRole.UserRole)
-            self.manager.duplicate_tile(tile_id)
-            self.populate_tree()
-            
-    def _rename_item(self, item):
-        """Rename a tile or folder."""
-        old_name = item.text(0)
-        name, ok = QInputDialog.getText(self, "Rename", "New name:", text=old_name)
-        if ok and name:
-            item.setText(0, name)
-            # TODO: Save rename to storage
-            
-    def _delete_item(self, item):
-        """Delete a tile or folder."""
-        reply = QMessageBox.question(self, "Delete", 
-                                   "Are you sure you want to delete this item?",
-                                   QMessageBox.StandardButton.Yes | 
-                                   QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            item_type = item.data(0, Qt.ItemDataRole.UserRole + 1)
-            if item_type == "tile":
-                tile_id = item.data(0, Qt.ItemDataRole.UserRole)
-                self.manager.delete_tile(tile_id)
-                self.populate_tree()
-                
-    def _edit_tile(self, item):
-        """Edit a tile."""
-        tile_id = item.data(0, Qt.ItemDataRole.UserRole)
-        self.tile_selected.emit(tile_id)
-
 
 class MainWindow(QMainWindow):
     def __init__(self, manager):

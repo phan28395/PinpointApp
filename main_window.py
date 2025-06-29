@@ -6,10 +6,10 @@ from PySide6.QtWidgets import (QMainWindow, QLabel, QSplitter, QListWidget,
                               QVBoxLayout, QWidget, QMenu, QStackedWidget,
                               QTreeWidget, QTreeWidgetItem, QHBoxLayout,
                               QDialog, QDialogButtonBox, QTextEdit, QLineEdit,
-                              QToolBar, QComboBox, QActionGroup, QButtonGroup,
+                              QToolBar, QComboBox, QButtonGroup,
                               QMessageBox, QInputDialog, QCheckBox)
 from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon,QActionGroup
 from .layout_editor import LayoutEditor
 from .draggable_list_widget import DraggableListWidget
 from .display_manager import get_display_manager
@@ -25,20 +25,21 @@ class IconButton(QPushButton):
         self.setFixedHeight(60)
         self.setStyleSheet("""
             QPushButton {
-                background-color: #2a2a2a;
+                background-color: transparent; /* Make the default background transparent */
                 border: none;
-                color: #888;
+                color: #888; /* Keep the inactive icon color subtle */
                 font-size: 24px;
-                padding: 10px;
+                border-radius: 5px; /* Add a slight rounding to the hover effect */
             }
             QPushButton:hover {
-                background-color: #3a3a3a;
-                color: #fff;
+                background-color: #3a3a3a; /* A subtle highlight on hover */
+                color: #eee;
             }
             QPushButton:checked {
-                background-color: #0d7377;
-                color: #fff;
-                border-left: 3px solid #14ffec;
+                background-color: #454545; /* A slightly lighter grey to show selection */
+                color: white; /* Make the selected icon bright white */
+                /* The border creates a strong, clear indicator of the active panel */
+                border-left: 3px solid #0098f4; /* A professional, calm blue accent */
             }
         """)
 

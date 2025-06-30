@@ -1,4 +1,4 @@
-# pinpoint/design_system.py - Centralized Design System for PinPoint
+# pinpoint/design_system.py - Enhanced with complete component support
 
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass
@@ -11,6 +11,7 @@ class ComponentType(Enum):
     LABEL = "label"
     BUTTON = "button"
     TEXT_EDIT = "text_edit"
+    LINE_EDIT = "line_edit"
     ICON = "icon"
     CONTAINER = "container"
     SPACER = "spacer"
@@ -29,6 +30,7 @@ class StyleVariant(Enum):
     SUCCESS = "success"
     WARNING = "warning"
     ERROR = "error"
+    TRANSPARENT = "transparent"
 
 
 @dataclass
@@ -46,7 +48,7 @@ class DesignConstraints:
         if self.allowed_components is None:
             self.allowed_components = list(ComponentType)
         if self.required_components is None:
-            self.required_components = ['drag_handle']
+            self.required_components = []  # No required components by default
 
 
 class DesignSystem:
@@ -111,6 +113,9 @@ class DesignSystem:
         
         'error': '#f87171',
         'error_hover': '#ef4444',
+        
+        'info': '#60a5fa',
+        'info_hover': '#3b82f6',
         
         # UI colors
         'border_subtle': '#333333',
@@ -240,6 +245,10 @@ class DesignSystem:
             bg_color = cls.COLORS['bg_tertiary']
             hover_color = cls.COLORS['bg_hover']
             text_color = cls.COLORS['text_primary']
+        elif variant == 'transparent':
+            bg_color = 'transparent'
+            hover_color = cls.COLORS['overlay_light']
+            text_color = cls.COLORS['text_primary']
         else:
             bg_color = cls.COLORS.get(variant, cls.COLORS['bg_tertiary'])
             hover_color = cls.COLORS.get(f'{variant}_hover', cls.COLORS['bg_hover'])
@@ -307,6 +316,40 @@ class DesignSystem:
         """
     
     @classmethod
+    def get_line_edit_style(cls, variant: str = 'primary', size: str = 'md') -> str:
+        """Generate QLineEdit stylesheet."""
+        font_size = cls.TYPOGRAPHY['font_size'].get(size, cls.TYPOGRAPHY['font_size']['md'])
+        
+        if variant == 'transparent':
+            bg_color = 'transparent'
+            border_style = f"border-bottom: 1px solid {cls.COLORS['border_subtle']}"
+            focus_border = f"border-bottom: 2px solid {cls.COLORS['accent']}"
+        else:
+            bg_color = cls.COLORS['bg_secondary']
+            border_style = f"border: 1px solid {cls.COLORS['border_subtle']}"
+            focus_border = f"border: 1px solid {cls.COLORS['accent']}"
+        
+        return f"""
+            QLineEdit {{
+                background-color: {bg_color};
+                color: {cls.COLORS['text_primary']};
+                {border_style};
+                border-radius: {cls.RADIUS['sm']}px;
+                padding: {cls.SPACING['xs']}px {cls.SPACING['sm']}px;
+                font-family: {cls.TYPOGRAPHY['font_family']['default']};
+                font-size: {font_size}px;
+                selection-background-color: {cls.COLORS['accent_muted']};
+            }}
+            QLineEdit:focus {{
+                {focus_border};
+            }}
+            QLineEdit:disabled {{
+                background-color: {cls.COLORS['bg_tertiary']};
+                color: {cls.COLORS['text_muted']};
+            }}
+        """
+    
+    @classmethod
     def get_container_style(cls, variant: str = 'primary', elevation: str = 'md') -> str:
         """Generate QFrame/QWidget container stylesheet."""
         bg_color = cls.COLORS.get(f'bg_{variant}', cls.COLORS['bg_secondary'])
@@ -317,6 +360,151 @@ class DesignSystem:
                 background-color: {bg_color};
                 border-radius: {cls.RADIUS['md']}px;
                 border: 1px solid {cls.COLORS['border_subtle']};
+            }}
+        """
+    
+    @classmethod
+    def get_icon_style(cls, variant: str = 'primary', size: str = 'md') -> str:
+        """Generate icon (QLabel) stylesheet."""
+        color = cls.COLORS.get(f'text_{variant}', cls.COLORS['text_primary'])
+        font_size = cls.TYPOGRAPHY['font_size'].get(size, cls.TYPOGRAPHY['font_size']['md'])
+        
+        return f"""
+            QLabel {{
+                color: {color};
+                font-size: {font_size}px;
+                padding: {cls.SPACING['xs']}px;
+                background-color: transparent;
+            }}
+        """
+    
+    @classmethod
+    def get_progress_style(cls, variant: str = 'primary', size: str = 'md') -> str:
+        """Generate QProgressBar stylesheet."""
+        bar_color = cls.COLORS.get(variant, cls.COLORS['accent'])
+        bg_color = cls.COLORS['bg_tertiary']
+        height = 4 if size == 'sm' else 8 if size == 'md' else 12
+        
+        return f"""
+            QProgressBar {{
+                background-color: {bg_color};
+                border: none;
+                border-radius: {height // 2}px;
+                height: {height}px;
+                text-align: center;
+                color: {cls.COLORS['text_primary']};
+                font-size: {cls.TYPOGRAPHY['font_size']['xs']}px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {bar_color};
+                border-radius: {height // 2}px;
+            }}
+        """
+    
+    @classmethod
+    def get_slider_style(cls, variant: str = 'primary', size: str = 'md') -> str:
+        """Generate QSlider stylesheet."""
+        handle_color = cls.COLORS.get(variant, cls.COLORS['accent'])
+        track_color = cls.COLORS['bg_tertiary']
+        handle_size = 12 if size == 'sm' else 16 if size == 'md' else 20
+        track_height = 4 if size == 'sm' else 6 if size == 'md' else 8
+        
+        return f"""
+            QSlider::groove:horizontal {{
+                background-color: {track_color};
+                height: {track_height}px;
+                border-radius: {track_height // 2}px;
+            }}
+            QSlider::handle:horizontal {{
+                background-color: {handle_color};
+                border: none;
+                width: {handle_size}px;
+                height: {handle_size}px;
+                margin: -{(handle_size - track_height) // 2}px 0;
+                border-radius: {handle_size // 2}px;
+            }}
+            QSlider::handle:horizontal:hover {{
+                background-color: {cls.COLORS.get(f'{variant}_hover', handle_color)};
+            }}
+            QSlider::groove:vertical {{
+                background-color: {track_color};
+                width: {track_height}px;
+                border-radius: {track_height // 2}px;
+            }}
+            QSlider::handle:vertical {{
+                background-color: {handle_color};
+                border: none;
+                width: {handle_size}px;
+                height: {handle_size}px;
+                margin: 0 -{(handle_size - track_height) // 2}px;
+                border-radius: {handle_size // 2}px;
+            }}
+        """
+    
+    @classmethod
+    def get_checkbox_style(cls, variant: str = 'primary', size: str = 'md') -> str:
+        """Generate QCheckBox stylesheet."""
+        check_color = cls.COLORS.get(variant, cls.COLORS['accent'])
+        text_color = cls.COLORS['text_primary']
+        font_size = cls.TYPOGRAPHY['font_size'].get(size, cls.TYPOGRAPHY['font_size']['md'])
+        indicator_size = 14 if size == 'sm' else 18 if size == 'md' else 22
+        
+        return f"""
+            QCheckBox {{
+                color: {text_color};
+                font-family: {cls.TYPOGRAPHY['font_family']['default']};
+                font-size: {font_size}px;
+                spacing: {cls.SPACING['xs']}px;
+            }}
+            QCheckBox::indicator {{
+                width: {indicator_size}px;
+                height: {indicator_size}px;
+                border: 2px solid {cls.COLORS['border_strong']};
+                border-radius: {cls.RADIUS['sm']}px;
+                background-color: {cls.COLORS['bg_secondary']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {check_color};
+                border-color: {check_color};
+            }}
+            QCheckBox::indicator:hover {{
+                border-color: {cls.COLORS['accent']};
+            }}
+        """
+    
+    @classmethod
+    def get_combo_box_style(cls, variant: str = 'primary', size: str = 'md') -> str:
+        """Generate QComboBox stylesheet."""
+        bg_color = cls.COLORS['bg_secondary']
+        border_color = cls.COLORS['border_subtle']
+        font_size = cls.TYPOGRAPHY['font_size'].get(size, cls.TYPOGRAPHY['font_size']['md'])
+        
+        return f"""
+            QComboBox {{
+                background-color: {bg_color};
+                color: {cls.COLORS['text_primary']};
+                border: 1px solid {border_color};
+                border-radius: {cls.RADIUS['md']}px;
+                padding: {cls.SPACING['xs']}px {cls.SPACING['sm']}px;
+                font-family: {cls.TYPOGRAPHY['font_family']['default']};
+                font-size: {font_size}px;
+            }}
+            QComboBox:hover {{
+                border-color: {cls.COLORS['accent']};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                padding-right: {cls.SPACING['sm']}px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border: none;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {bg_color};
+                border: 1px solid {border_color};
+                selection-background-color: {cls.COLORS['bg_selected']};
+                color: {cls.COLORS['text_primary']};
             }}
         """
     
@@ -399,15 +587,20 @@ class DesignSystem:
             else:
                 # Validate each component
                 for i, comp in enumerate(layout['components']):
-                    comp_errors = cls._validate_component(comp, f"components[{i}]")
+                    comp_errors = cls._validate_component(comp, f"components[{i}]", 0)
                     errors.extend(comp_errors)
         
         return len(errors) == 0, errors
     
     @classmethod
-    def _validate_component(cls, component: Dict[str, Any], path: str) -> List[str]:
+    def _validate_component(cls, component: Dict[str, Any], path: str, depth: int) -> List[str]:
         """Validate a single component specification."""
         errors = []
+        
+        # Check depth
+        if depth > 5:  # Max nesting depth
+            errors.append(f"{path}: Component nesting too deep (max depth: 5)")
+            return errors
         
         if 'type' not in component:
             errors.append(f"{path}: Missing 'type' field")
@@ -418,8 +611,14 @@ class DesignSystem:
             except ValueError:
                 errors.append(f"{path}: Invalid component type '{comp_type}'")
         
-        if 'id' not in component:
+        if 'id' not in component and component.get('type') != ComponentType.SPACER.value:
             errors.append(f"{path}: Missing 'id' field")
+        
+        # Validate container recursively
+        if component.get('type') == ComponentType.CONTAINER.value and 'components' in component:
+            for i, sub_comp in enumerate(component['components']):
+                sub_errors = cls._validate_component(sub_comp, f"{path}.components[{i}]", depth + 1)
+                errors.extend(sub_errors)
         
         return errors
     

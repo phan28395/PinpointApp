@@ -29,13 +29,13 @@ PinPoint is a desktop application for creating floating widgets (tiles) that can
   - [x] Test that NoteTile works with both embedded and external designs
   - [x] Document the separation pattern for other developers
 
-- [ ] **1.2 Enhance BaseTile Design Rendering**
-  - [ ] Implement full component type support (all ComponentType enum values)
-  - [ ] Add layout managers (vertical, horizontal, grid, absolute)
-  - [ ] Implement component property binding to tile data
-  - [ ] Add event handler mapping (component actions → tile methods)
-  - [ ] Create component factory with extensibility
-
+- [x] **1.2 Enhance BaseTile Design Rendering**
+  - [x] Implement full component type support (all ComponentType enum values)
+  - [x] Add layout managers (vertical, horizontal, grid, absolute)
+  - [x] Implement component property binding to tile data
+  - [x] Add event handler mapping (component actions → tile methods)
+  - [x] Create component factory with extensibility
+  
 - [ ] **1.3 Strengthen Design Constraints System**
   - [ ] Implement size constraint validation in design renderer
   - [ ] Add required component validation

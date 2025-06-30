@@ -1,10 +1,325 @@
-# pinpoint/base_tile.py - Enhanced with better design rendering
+# pinpoint/base_tile.py - Enhanced with complete design rendering system
 
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFrame, QPushButton, QHBoxLayout, 
-                              QLabel, QTextEdit, QLineEdit, QSpacerItem, QSizePolicy)
-from PySide6.QtCore import Qt, Signal, QPoint
-from typing import Dict, Any, Optional
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFrame, 
+                              QPushButton, QLabel, QTextEdit, QLineEdit, QSpacerItem, 
+                              QSizePolicy, QProgressBar, QSlider, QCheckBox, QLayout)
+from PySide6.QtCore import Qt, Signal, QPoint, QTimer, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QPixmap, QIcon
+from typing import Dict, Any, Optional, Callable, List, Union
 from .design_system import DesignSystem, ComponentType, spacing, color
+import weakref
+
+
+class ComponentFactory:
+    """
+    Extensible factory for creating components.
+    Allows plugins to register custom component types.
+    """
+    
+    def __init__(self):
+        self._creators: Dict[str, Callable] = {}
+        self._register_default_components()
+        
+    def _register_default_components(self):
+        """Register all default component creators."""
+        self.register('label', self._create_label)
+        self.register('button', self._create_button)
+        self.register('text_edit', self._create_text_edit)
+        self.register('container', self._create_container)
+        self.register('icon', self._create_icon)
+        self.register('image', self._create_image)
+        self.register('progress', self._create_progress)
+        self.register('slider', self._create_slider)
+        self.register('checkbox', self._create_checkbox)
+        self.register('line_edit', self._create_line_edit)
+        
+    def register(self, component_type: str, creator: Callable):
+        """Register a component creator function."""
+        self._creators[component_type] = creator
+        
+    def create(self, spec: Dict[str, Any], parent_tile) -> Optional[QWidget]:
+        """Create a component from specification."""
+        comp_type = spec.get('type')
+        creator = self._creators.get(comp_type)
+        
+        if creator:
+            return creator(spec, parent_tile)
+        else:
+            print(f"Unknown component type: {comp_type}")
+            return None
+            
+    # Default component creators
+    def _create_label(self, spec: Dict[str, Any], parent_tile) -> QLabel:
+        widget = QLabel()
+        widget.setText(spec.get('text', ''))
+        widget.setAlignment(parent_tile._parse_alignment(spec.get('alignment', 'left')))
+        if spec.get('word_wrap', False):
+            widget.setWordWrap(True)
+        return widget
+        
+    def _create_button(self, spec: Dict[str, Any], parent_tile) -> QPushButton:
+        widget = QPushButton()
+        widget.setText(spec.get('text', 'Button'))
+        
+        # Enhanced event mapping
+        if 'action' in spec:
+            widget.clicked.connect(lambda: parent_tile.handle_action(spec['action']))
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        # Additional properties
+        if spec.get('checkable', False):
+            widget.setCheckable(True)
+        if 'checked' in spec:
+            widget.setChecked(spec['checked'])
+            
+        return widget
+        
+    def _create_text_edit(self, spec: Dict[str, Any], parent_tile) -> QTextEdit:
+        widget = QTextEdit()
+        if spec.get('read_only', False):
+            widget.setReadOnly(True)
+        widget.setPlaceholderText(spec.get('placeholder', ''))
+        
+        # Initial text
+        if 'text' in spec:
+            widget.setPlainText(spec['text'])
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+        
+    def _create_line_edit(self, spec: Dict[str, Any], parent_tile) -> QLineEdit:
+        widget = QLineEdit()
+        widget.setPlaceholderText(spec.get('placeholder', ''))
+        
+        if 'text' in spec:
+            widget.setText(spec['text'])
+        if spec.get('password', False):
+            widget.setEchoMode(QLineEdit.EchoMode.Password)
+        if 'max_length' in spec:
+            widget.setMaxLength(spec['max_length'])
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+        
+    def _create_container(self, spec: Dict[str, Any], parent_tile) -> QFrame:
+        widget = QFrame()
+        
+        # Frame style
+        if spec.get('frame_style'):
+            styles = {
+                'box': QFrame.Shape.Box,
+                'panel': QFrame.Shape.Panel,
+                'styled_panel': QFrame.Shape.StyledPanel,
+                'no_frame': QFrame.Shape.NoFrame
+            }
+            widget.setFrameStyle(styles.get(spec['frame_style'], QFrame.Shape.NoFrame))
+            
+        return widget
+        
+    def _create_icon(self, spec: Dict[str, Any], parent_tile) -> QLabel:
+        widget = QLabel()
+        
+        # Support emoji or icon paths
+        icon_data = spec.get('icon', '')
+        if icon_data.startswith('/') or icon_data.startswith('./'):
+            # File path
+            pixmap = QPixmap(icon_data)
+            if not pixmap.isNull():
+                size = spec.get('size', 16)
+                pixmap = pixmap.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatio, 
+                                     Qt.TransformationMode.SmoothTransformation)
+                widget.setPixmap(pixmap)
+        else:
+            # Emoji or text icon
+            widget.setText(icon_data)
+            widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+        return widget
+        
+    def _create_image(self, spec: Dict[str, Any], parent_tile) -> QLabel:
+        widget = QLabel()
+        
+        if 'path' in spec:
+            pixmap = QPixmap(spec['path'])
+            if not pixmap.isNull():
+                # Scale if size specified
+                if 'width' in spec or 'height' in spec:
+                    w = spec.get('width', pixmap.width())
+                    h = spec.get('height', pixmap.height())
+                    aspect_mode = Qt.AspectRatioMode.KeepAspectRatio
+                    if spec.get('stretch', False):
+                        aspect_mode = Qt.AspectRatioMode.IgnoreAspectRatio
+                    pixmap = pixmap.scaled(w, h, aspect_mode, 
+                                         Qt.TransformationMode.SmoothTransformation)
+                widget.setPixmap(pixmap)
+                
+        widget.setAlignment(parent_tile._parse_alignment(spec.get('alignment', 'center')))
+        return widget
+        
+    def _create_progress(self, spec: Dict[str, Any], parent_tile) -> QProgressBar:
+        widget = QProgressBar()
+        
+        widget.setMinimum(spec.get('min', 0))
+        widget.setMaximum(spec.get('max', 100))
+        widget.setValue(spec.get('value', 0))
+        
+        if spec.get('text_visible', True):
+            widget.setTextVisible(True)
+        if 'format' in spec:
+            widget.setFormat(spec['format'])
+            
+        # Orientation
+        if spec.get('orientation') == 'vertical':
+            widget.setOrientation(Qt.Orientation.Vertical)
+            
+        return widget
+        
+    def _create_slider(self, spec: Dict[str, Any], parent_tile) -> QSlider:
+        widget = QSlider()
+        
+        # Orientation
+        orientation = Qt.Orientation.Horizontal
+        if spec.get('orientation') == 'vertical':
+            orientation = Qt.Orientation.Vertical
+        widget.setOrientation(orientation)
+        
+        # Range and value
+        widget.setMinimum(spec.get('min', 0))
+        widget.setMaximum(spec.get('max', 100))
+        widget.setValue(spec.get('value', 50))
+        
+        # Tick marks
+        if spec.get('tick_position'):
+            positions = {
+                'above': QSlider.TickPosition.TicksAbove,
+                'below': QSlider.TickPosition.TicksBelow,
+                'both': QSlider.TickPosition.TicksBothSides,
+                'none': QSlider.TickPosition.NoTicks
+            }
+            widget.setTickPosition(positions.get(spec['tick_position'], QSlider.TickPosition.NoTicks))
+            
+        if 'tick_interval' in spec:
+            widget.setTickInterval(spec['tick_interval'])
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+        
+    def _create_checkbox(self, spec: Dict[str, Any], parent_tile) -> QCheckBox:
+        widget = QCheckBox()
+        
+        widget.setText(spec.get('text', ''))
+        if 'checked' in spec:
+            widget.setChecked(spec['checked'])
+        if spec.get('tristate', False):
+            widget.setTristate(True)
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+
+
+class LayoutFactory:
+    """Factory for creating different layout types."""
+    
+    @staticmethod
+    def create(layout_type: str, spec: Dict[str, Any]) -> QLayout:
+        """Create a layout based on type."""
+        if layout_type == 'horizontal':
+            layout = QHBoxLayout()
+        elif layout_type == 'grid':
+            layout = QGridLayout()
+            # Set grid properties
+            if 'column_spacing' in spec:
+                layout.setHorizontalSpacing(spec['column_spacing'])
+            if 'row_spacing' in spec:
+                layout.setVerticalSpacing(spec['row_spacing'])
+        else:  # Default to vertical
+            layout = QVBoxLayout()
+            
+        # Common layout properties
+        if 'spacing' in spec:
+            if isinstance(spec['spacing'], str):
+                layout.setSpacing(spacing(spec['spacing']))
+            else:
+                layout.setSpacing(spec['spacing'])
+                
+        if 'margins' in spec:
+            margins = spec['margins']
+            if isinstance(margins, str):
+                m = spacing(margins)
+                layout.setContentsMargins(m, m, m, m)
+            elif isinstance(margins, list) and len(margins) == 4:
+                layout.setContentsMargins(*margins)
+                
+        return layout
+
+
+class PropertyBinding:
+    """Manages property bindings between tile data and UI components."""
+    
+    def __init__(self, tile):
+        self.tile = weakref.ref(tile)  # Weak reference to avoid circular refs
+        self.bindings: Dict[str, List[Dict[str, Any]]] = {}
+        
+    def bind(self, data_key: str, component_id: str, property_name: str, 
+             transformer: Optional[Callable] = None):
+        """Bind a data key to a component property."""
+        if data_key not in self.bindings:
+            self.bindings[data_key] = []
+            
+        self.bindings[data_key].append({
+            'component_id': component_id,
+            'property': property_name,
+            'transformer': transformer
+        })
+        
+    def update(self, data_key: str, value: Any):
+        """Update all bindings for a data key."""
+        tile = self.tile()
+        if not tile:
+            return
+            
+        if data_key in self.bindings:
+            for binding in self.bindings[data_key]:
+                component = tile.get_component(binding['component_id'])
+                if component:
+                    # Apply transformer if provided
+                    if binding['transformer']:
+                        value = binding['transformer'](value)
+                        
+                    # Update component property
+                    self._update_property(component, binding['property'], value)
+                    
+    def _update_property(self, widget: QWidget, property_name: str, value: Any):
+        """Update a specific property on a widget."""
+        if property_name == 'text':
+            if hasattr(widget, 'setText'):
+                widget.setText(str(value))
+            elif hasattr(widget, 'setPlainText'):
+                widget.setPlainText(str(value))
+        elif property_name == 'value':
+            if hasattr(widget, 'setValue'):
+                widget.setValue(value)
+        elif property_name == 'checked':
+            if hasattr(widget, 'setChecked'):
+                widget.setChecked(bool(value))
+        elif property_name == 'visible':
+            widget.setVisible(bool(value))
+        elif property_name == 'enabled':
+            widget.setEnabled(bool(value))
+        # Add more property mappings as needed
 
 
 class BaseTileCore(QWidget):
@@ -237,6 +552,16 @@ class BaseTile(BaseTileCore):
         # Store design spec if provided
         self.design_spec = tile_data.get('design_spec', None)
         
+        # Initialize component factory and property binding
+        self.component_factory = ComponentFactory()
+        self.property_binding = PropertyBinding(self)
+        
+        # Component registry for tracking created components
+        self._components: Dict[str, QWidget] = {}
+        
+        # Event handlers registry
+        self._event_handlers: Dict[str, List[Callable]] = {}
+        
         # Initialize core functionality
         super().__init__(tile_data)
         
@@ -277,6 +602,7 @@ class BaseTile(BaseTileCore):
             text_edit.setObjectName("noteTextEdit")
             text_edit.setStyleSheet(DesignSystem.get_text_edit_style())
             self.content_layout.addWidget(text_edit)
+            self._components["noteTextEdit"] = text_edit
         else:
             # For other tiles, just show a label
             label = QLabel(f"{self.tile_data.get('type', 'Unknown')} Tile")
@@ -298,58 +624,69 @@ class BaseTile(BaseTileCore):
         # Clear existing content
         self.clear_content()
         
+        # Clear component registry
+        self._components.clear()
+        
+        # Process bindings if specified
+        if 'bindings' in spec:
+            self._setup_bindings(spec['bindings'])
+        
         # Render the layout
         layout_spec = spec.get('layout', {})
-        self._render_layout(layout_spec, self.content_layout)
+        self._render_layout(layout_spec, self.content_widget)
         
         # Apply custom styling if provided
         styling_spec = spec.get('styling', {})
         self._apply_custom_styling(styling_spec)
         
-    def _render_layout(self, layout_spec: Dict[str, Any], parent_layout: QVBoxLayout):
+        # Initialize bound data
+        self._initialize_bound_data()
+        
+    def _render_layout(self, layout_spec: Dict[str, Any], parent_widget: QWidget):
         """Recursively renders a layout specification."""
+        # Get or create layout
+        layout_type = layout_spec.get('type', 'vertical')
+        
+        if parent_widget == self.content_widget:
+            # Replace the content layout
+            old_layout = parent_widget.layout()
+            if old_layout:
+                QWidget().setLayout(old_layout)  # Detach old layout
+            
+            new_layout = LayoutFactory.create(layout_type, layout_spec)
+            parent_widget.setLayout(new_layout)
+            layout = new_layout
+        else:
+            # Create new layout for container
+            layout = LayoutFactory.create(layout_type, layout_spec)
+            parent_widget.setLayout(layout)
+        
+        # Render components
         components = layout_spec.get('components', [])
         
-        for comp_spec in components:
+        for i, comp_spec in enumerate(components):
             widget = self._create_component(comp_spec)
             if widget:
-                parent_layout.addWidget(widget)
-                
+                # Add to layout with positioning
+                if isinstance(layout, QGridLayout) and 'grid' in comp_spec:
+                    grid = comp_spec['grid']
+                    row = grid.get('row', i)
+                    col = grid.get('col', 0)
+                    row_span = grid.get('row_span', 1)
+                    col_span = grid.get('col_span', 1)
+                    layout.addWidget(widget, row, col, row_span, col_span)
+                else:
+                    # Add stretch factors if specified
+                    stretch = comp_spec.get('stretch', 0)
+                    if isinstance(layout, (QHBoxLayout, QVBoxLayout)):
+                        layout.addWidget(widget, stretch)
+                    else:
+                        layout.addWidget(widget)
+                        
     def _create_component(self, comp_spec: Dict[str, Any]) -> Optional[QWidget]:
         """Creates a widget from a component specification."""
-        comp_type = comp_spec.get('type')
-        comp_id = comp_spec.get('id', '')
-        
-        # Create widget based on type
-        widget = None
-        
-        if comp_type == ComponentType.LABEL.value:
-            widget = QLabel()
-            widget.setText(comp_spec.get('text', ''))
-            widget.setAlignment(self._parse_alignment(comp_spec.get('alignment', 'left')))
-            
-        elif comp_type == ComponentType.BUTTON.value:
-            widget = QPushButton()
-            widget.setText(comp_spec.get('text', 'Button'))
-            if 'action' in comp_spec:
-                # Connect to tile action handler
-                widget.clicked.connect(lambda: self.handle_action(comp_spec['action']))
-                
-        elif comp_type == ComponentType.TEXT_EDIT.value:
-            widget = QTextEdit()
-            if comp_spec.get('read_only', False):
-                widget.setReadOnly(True)
-            widget.setPlaceholderText(comp_spec.get('placeholder', ''))
-                
-        elif comp_type == ComponentType.CONTAINER.value:
-            widget = QFrame()
-            # Recursively render container contents
-            container_layout = QVBoxLayout(widget)
-            if 'components' in comp_spec:
-                layout_spec = {'components': comp_spec['components']}
-                self._render_layout(layout_spec, container_layout)
-                
-        elif comp_type == ComponentType.SPACER.value:
+        # Handle spacers separately
+        if comp_spec.get('type') == ComponentType.SPACER.value:
             # Create a spacer item instead of a widget
             spacer = QSpacerItem(
                 comp_spec.get('width', 0),
@@ -357,23 +694,102 @@ class BaseTile(BaseTileCore):
                 QSizePolicy.Policy.Expanding if comp_spec.get('horizontal', True) else QSizePolicy.Policy.Minimum,
                 QSizePolicy.Policy.Expanding if comp_spec.get('vertical', True) else QSizePolicy.Policy.Minimum
             )
-            parent_layout.addItem(spacer)
             return None  # Spacer is not a widget
             
-        # Add more component types as needed...
+        # Use component factory
+        widget = self.component_factory.create(comp_spec, self)
         
         if widget:
+            comp_id = comp_spec.get('id', '')
+            
             # Set object name for styling
             widget.setObjectName(comp_id)
             
+            # Register component
+            if comp_id:
+                self._components[comp_id] = widget
+            
             # Apply component style
+            comp_type = comp_spec.get('type')
             style_variant = comp_spec.get('style', 'primary')
             style_size = comp_spec.get('size', 'md')
             style = DesignSystem.get_style(comp_type, style_variant, size=style_size)
             if style:
                 widget.setStyleSheet(style)
                 
+            # Handle container recursion
+            if comp_spec.get('type') == ComponentType.CONTAINER.value and 'components' in comp_spec:
+                layout_spec = {
+                    'type': comp_spec.get('layout_type', 'vertical'),
+                    'components': comp_spec['components']
+                }
+                self._render_layout(layout_spec, widget)
+                
+            # Set size constraints if specified
+            if 'min_width' in comp_spec:
+                widget.setMinimumWidth(comp_spec['min_width'])
+            if 'min_height' in comp_spec:
+                widget.setMinimumHeight(comp_spec['min_height'])
+            if 'max_width' in comp_spec:
+                widget.setMaximumWidth(comp_spec['max_width'])
+            if 'max_height' in comp_spec:
+                widget.setMaximumHeight(comp_spec['max_height'])
+            if 'fixed_width' in comp_spec:
+                widget.setFixedWidth(comp_spec['fixed_width'])
+            if 'fixed_height' in comp_spec:
+                widget.setFixedHeight(comp_spec['fixed_height'])
+                
         return widget
+        
+    def _map_events(self, widget: QWidget, events: Dict[str, str]):
+        """Map widget events to tile actions."""
+        for event_name, action in events.items():
+            if event_name == 'clicked' and hasattr(widget, 'clicked'):
+                widget.clicked.connect(lambda a=action: self.handle_action(a))
+            elif event_name == 'text_changed':
+                if hasattr(widget, 'textChanged'):
+                    widget.textChanged.connect(lambda a=action: self.handle_action(a))
+                elif hasattr(widget, 'textEdited'):
+                    widget.textEdited.connect(lambda text, a=action: self.handle_action(a))
+            elif event_name == 'value_changed' and hasattr(widget, 'valueChanged'):
+                widget.valueChanged.connect(lambda val, a=action: self.handle_action(a))
+            elif event_name == 'state_changed' and hasattr(widget, 'stateChanged'):
+                widget.stateChanged.connect(lambda state, a=action: self.handle_action(a))
+            # Add more event mappings as needed
+            
+    def _setup_bindings(self, bindings: List[Dict[str, Any]]):
+        """Setup property bindings from design spec."""
+        for binding in bindings:
+            data_key = binding.get('data')
+            component_id = binding.get('component')
+            property_name = binding.get('property', 'text')
+            transformer = binding.get('transformer')
+            
+            if data_key and component_id:
+                # Parse transformer if it's a string expression
+                if isinstance(transformer, str):
+                    transformer = self._create_transformer(transformer)
+                    
+                self.property_binding.bind(data_key, component_id, property_name, transformer)
+                
+    def _create_transformer(self, expression: str) -> Callable:
+        """Create a transformer function from a string expression."""
+        # Simple expression parser - in production, use a proper expression evaluator
+        if expression.startswith('format:'):
+            format_str = expression[7:]
+            return lambda val: format_str.format(val)
+        elif expression == 'uppercase':
+            return lambda val: str(val).upper()
+        elif expression == 'lowercase':
+            return lambda val: str(val).lower()
+        else:
+            # Default: convert to string
+            return str
+            
+    def _initialize_bound_data(self):
+        """Initialize any bound data from tile data."""
+        # This would be overridden by subclasses to set initial values
+        pass
         
     def _parse_alignment(self, alignment: str) -> Qt.AlignmentFlag:
         """Parse alignment string to Qt alignment flag."""
@@ -395,12 +811,35 @@ class BaseTile(BaseTileCore):
         # Apply custom component styles
         custom_styles = styling_spec.get('custom_styles', {})
         for component_id, style_overrides in custom_styles.items():
-            widget = self.findChild(QWidget, component_id)
+            widget = self.get_component(component_id)
             if widget:
-                # Apply style overrides safely
-                # This would need more implementation
-                pass
-                
+                # Build custom stylesheet from overrides
+                custom_style = self._build_custom_style(widget, style_overrides)
+                if custom_style:
+                    widget.setStyleSheet(widget.styleSheet() + custom_style)
+                    
+    def _build_custom_style(self, widget: QWidget, overrides: Dict[str, Any]) -> str:
+        """Build custom stylesheet from style overrides."""
+        # This is a simplified version - in production, use a proper CSS builder
+        styles = []
+        
+        if 'background' in overrides:
+            styles.append(f"background-color: {overrides['background']};")
+        if 'color' in overrides:
+            styles.append(f"color: {overrides['color']};")
+        if 'padding' in overrides:
+            p = overrides['padding']
+            if isinstance(p, str):
+                p = spacing(p)
+            styles.append(f"padding: {p}px;")
+        if 'border' in overrides:
+            styles.append(f"border: {overrides['border']};")
+            
+        if styles:
+            widget_class = widget.__class__.__name__
+            return f"{widget_class} {{ {' '.join(styles)} }}"
+        return ""
+        
     def _show_design_errors(self, errors: list):
         """Shows design validation errors in the content area."""
         self.clear_content()
@@ -415,6 +854,10 @@ class BaseTile(BaseTileCore):
         
     def clear_content(self):
         """Clears all widgets from the content area."""
+        # Clear components registry
+        self._components.clear()
+        
+        # Clear layout
         while self.content_layout.count():
             child = self.content_layout.takeAt(0)
             if child.widget():
@@ -427,22 +870,50 @@ class BaseTile(BaseTileCore):
         """
         print(f"Action triggered: {action}")
         
+        # Emit custom event if handlers are registered
+        if action in self._event_handlers:
+            for handler in self._event_handlers[action]:
+                handler()
+                
+    def register_action_handler(self, action: str, handler: Callable):
+        """Register a handler for a custom action."""
+        if action not in self._event_handlers:
+            self._event_handlers[action] = []
+        self._event_handlers[action].append(handler)
+        
     def update_component_data(self, component_id: str, data: Any):
         """
         Updates data for a specific component.
         This allows tile logic to update the UI without knowing the implementation.
         """
-        widget = self.findChild(QWidget, component_id)
+        widget = self.get_component(component_id)
         if widget:
             if isinstance(widget, QLabel):
                 widget.setText(str(data))
             elif isinstance(widget, QPushButton):
                 widget.setText(str(data))
+            elif isinstance(widget, QProgressBar):
+                widget.setValue(int(data))
+            elif isinstance(widget, QSlider):
+                widget.setValue(int(data))
+            elif isinstance(widget, QCheckBox):
+                if isinstance(data, bool):
+                    widget.setChecked(data)
+                else:
+                    widget.setText(str(data))
             # Add more widget types as needed...
             
+    def update_bound_data(self, data_key: str, value: Any):
+        """Update data through the binding system."""
+        self.property_binding.update(data_key, value)
+        
     def get_component(self, component_id: str) -> Optional[QWidget]:
         """
         Get a component by ID for direct manipulation.
         Use sparingly - prefer update_component_data for loose coupling.
         """
-        return self.findChild(QWidget, component_id)
+        return self._components.get(component_id)
+        
+    def register_component_factory(self, component_type: str, creator: Callable):
+        """Allow plugins to register custom component types."""
+        self.component_factory.register(component_type, creator)

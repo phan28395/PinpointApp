@@ -1,15 +1,15 @@
 # pinpoint/base_tile.py - Enhanced with complete design constraints validation
 
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFrame, 
-                              QPushButton, QLabel, QTextEdit, QLineEdit, QSpacerItem, 
-                              QSizePolicy, QProgressBar, QSlider, QCheckBox, QLayout,
-                              QScrollArea)
 from PySide6.QtCore import Qt, Signal, QPoint, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon
 from typing import Dict, Any, Optional, Callable, List, Union, Tuple
 from design_system import DesignSystem, ComponentType, spacing, color, DesignConstraints
 import weakref
-
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFrame, 
+                              QPushButton, QLabel, QTextEdit, QLineEdit, QSpacerItem, 
+                              QSizePolicy, QProgressBar, QSlider, QCheckBox, QLayout,
+                              QScrollArea, QRadioButton, QComboBox, QSpinBox, QTabWidget,
+                              QGroupBox)
 
 class DesignValidator:
     """
@@ -441,7 +441,244 @@ class ComponentFactory:
             
         return widget
 
+    def _register_default_components(self):
+        """Register all default component creators."""
+        self.register('label', self._create_label)
+        self.register('button', self._create_button)
+        self.register('text_edit', self._create_text_edit)
+        self.register('container', self._create_container)
+        self.register('icon', self._create_icon)
+        self.register('image', self._create_image)
+        self.register('progress', self._create_progress)
+        self.register('slider', self._create_slider)
+        self.register('checkbox', self._create_checkbox)
+        self.register('line_edit', self._create_line_edit)
+        # New component types
+        self.register('radio', self._create_radio)
+        self.register('combo_box', self._create_combo_box)
+        self.register('spin_box', self._create_spin_box)
+        self.register('tab_widget', self._create_tab_widget)
+        self.register('group_box', self._create_group_box)
+        
+    def _create_radio(self, spec: Dict[str, Any], parent_tile) -> QRadioButton:
+        """Create a radio button."""
+        widget = QRadioButton()
+        widget.setText(spec.get('text', ''))
+        
+        if 'checked' in spec:
+            widget.setChecked(spec['checked'])
+            
+        # Group name for exclusive selection
+        if 'group' in spec:
+            # Radio buttons with same group name will be exclusive
+            widget.setObjectName(f"radio_{spec['group']}")
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+        
+    def _create_combo_box(self, spec: Dict[str, Any], parent_tile) -> QComboBox:
+        """Create a combo box."""
+        widget = QComboBox()
+        
+        # Add items
+        items = spec.get('items', [])
+        if isinstance(items, list):
+            for item in items:
+                if isinstance(item, dict):
+                    # Item with data
+                    widget.addItem(item.get('text', ''), item.get('data'))
+                else:
+                    # Simple string item
+                    widget.addItem(str(item))
+                    
+        # Set current item
+        if 'current_index' in spec:
+            widget.setCurrentIndex(spec['current_index'])
+        elif 'current_text' in spec:
+            widget.setCurrentText(spec['current_text'])
+            
+        # Editable
+        if spec.get('editable', False):
+            widget.setEditable(True)
+            
+        # Max visible items
+        if 'max_visible' in spec:
+            widget.setMaxVisibleItems(spec['max_visible'])
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+        
+    def _create_spin_box(self, spec: Dict[str, Any], parent_tile) -> QSpinBox:
+        """Create a spin box."""
+        widget = QSpinBox()
+        
+        # Range
+        widget.setMinimum(spec.get('min', 0))
+        widget.setMaximum(spec.get('max', 100))
+        widget.setValue(spec.get('value', 0))
+        
+        # Step
+        if 'step' in spec:
+            widget.setSingleStep(spec['step'])
+            
+        # Prefix/Suffix
+        if 'prefix' in spec:
+            widget.setPrefix(spec['prefix'])
+        if 'suffix' in spec:
+            widget.setSuffix(spec['suffix'])
+            
+        # Special value text (shown at minimum)
+        if 'special_value' in spec:
+            widget.setSpecialValueText(spec['special_value'])
+            
+        # Wrapping
+        if spec.get('wrapping', False):
+            widget.setWrapping(True)
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+        
+    def _create_tab_widget(self, spec: Dict[str, Any], parent_tile) -> QTabWidget:
+        """Create a tab widget."""
+        widget = QTabWidget()
+        
+        # Tab position
+        positions = {
+            'north': QTabWidget.TabPosition.North,
+            'south': QTabWidget.TabPosition.South,
+            'west': QTabWidget.TabPosition.West,
+            'east': QTabWidget.TabPosition.East
+        }
+        if 'tab_position' in spec:
+            widget.setTabPosition(positions.get(spec['tab_position'], QTabWidget.TabPosition.North))
+            
+        # Closable tabs
+        if spec.get('closable', False):
+            widget.setTabsClosable(True)
+            
+        # Movable tabs
+        if spec.get('movable', False):
+            widget.setMovable(True)
+            
+        # Add tabs
+        tabs = spec.get('tabs', [])
+        for tab_spec in tabs:
+            if isinstance(tab_spec, dict):
+                # Create tab content
+                tab_widget = QWidget()
+                tab_layout = QVBoxLayout(tab_widget)
+                
+                # Render components in tab
+                if 'components' in tab_spec:
+                    parent_tile._render_layout(
+                        {'type': 'vertical', 'components': tab_spec['components']},
+                        tab_widget
+                    )
+                    
+                # Add tab
+                title = tab_spec.get('title', 'Tab')
+                icon = tab_spec.get('icon')
+                if icon:
+                    # Handle icon if provided
+                    widget.addTab(tab_widget, title)
+                else:
+                    widget.addTab(tab_widget, title)
+                    
+                # Set tab properties
+                tab_index = widget.count() - 1
+                if tab_spec.get('enabled', True) == False:
+                    widget.setTabEnabled(tab_index, False)
+                if 'tooltip' in tab_spec:
+                    widget.setTabToolTip(tab_index, tab_spec['tooltip'])
+                    
+        # Set current tab
+        if 'current_index' in spec:
+            widget.setCurrentIndex(spec['current_index'])
+            
+        # Events
+        if 'events' in spec:
+            parent_tile._map_events(widget, spec['events'])
+            
+        return widget
+        
+    def _create_group_box(self, spec: Dict[str, Any], parent_tile) -> QGroupBox:
+        """Create a group box."""
+        widget = QGroupBox()
+        
+        # Title
+        widget.setTitle(spec.get('title', ''))
+        
+        # Checkable
+        if spec.get('checkable', False):
+            widget.setCheckable(True)
+            if 'checked' in spec:
+                widget.setChecked(spec['checked'])
+                
+        # Alignment
+        alignments = {
+            'left': Qt.AlignmentFlag.AlignLeft,
+            'center': Qt.AlignmentFlag.AlignCenter,
+            'right': Qt.AlignmentFlag.AlignRight
+        }
+        if 'title_alignment' in spec:
+            widget.setAlignment(alignments.get(spec['title_alignment'], Qt.AlignmentFlag.AlignLeft))
+            
+        # Flat style
+        if spec.get('flat', False):
+            widget.setFlat(True)
+            
+        # Create layout for contents
+        layout_type = spec.get('layout_type', 'vertical')
+        layout = LayoutFactory.create(layout_type, spec)
+        widget.setLayout(layout)
+        
+        # Render components inside
+        if 'components' in spec:
+            parent_tile._render_layout(
+                {'type': layout_type, 'components': spec['components']},
+                widget
+            )
+            
+        return widget
 
+# Also update the _map_events method to handle new event types:
+
+    def _map_events(self, widget: QWidget, events: Dict[str, str]):
+        """Map widget events to tile actions."""
+        for event_name, action in events.items():
+            if event_name == 'clicked' and hasattr(widget, 'clicked'):
+                widget.clicked.connect(lambda a=action: self.handle_action(a))
+            elif event_name == 'text_changed':
+                if hasattr(widget, 'textChanged'):
+                    widget.textChanged.connect(lambda a=action: self.handle_action(a))
+                elif hasattr(widget, 'textEdited'):
+                    widget.textEdited.connect(lambda text, a=action: self.handle_action(a))
+            elif event_name == 'value_changed' and hasattr(widget, 'valueChanged'):
+                widget.valueChanged.connect(lambda val, a=action: self.handle_action(a))
+            elif event_name == 'state_changed' and hasattr(widget, 'stateChanged'):
+                widget.stateChanged.connect(lambda state, a=action: self.handle_action(a))
+            # New event mappings
+            elif event_name == 'toggled' and hasattr(widget, 'toggled'):
+                widget.toggled.connect(lambda checked, a=action: self.handle_action(a))
+            elif event_name == 'current_changed':
+                if hasattr(widget, 'currentIndexChanged'):  # QComboBox, QTabWidget
+                    widget.currentIndexChanged.connect(lambda idx, a=action: self.handle_action(a))
+                elif hasattr(widget, 'currentTextChanged'):  # QComboBox
+                    widget.currentTextChanged.connect(lambda text, a=action: self.handle_action(a))
+            elif event_name == 'tab_close_requested' and hasattr(widget, 'tabCloseRequested'):
+                widget.tabCloseRequested.connect(lambda idx, a=action: self.handle_action(a))
+            elif event_name == 'item_selected' and hasattr(widget, 'itemSelectionChanged'):
+                widget.itemSelectionChanged.connect(lambda a=action: self.handle_action(a))
+            # Add more event mappings as needed
 class LayoutFactory:
     """Factory for creating different layout types."""
     

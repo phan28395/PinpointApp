@@ -158,3 +158,77 @@ With Phase 1.3 complete, the core architecture refactoring (Phase 1) is finished
 - Documenting all design tokens
 
 The constraint system now ensures that third-party designs will work correctly with tiles while providing clear feedback when they don't meet requirements.
+
+## Session 4 - 30/06/2025
+
+### Overview
+Successfully completed Phase 2.1 - Expand Design System Components. The implementation provides a complete theme inheritance system and styles for all planned component types.
+
+### Implementation Strategy
+
+Due to the file size, the implementation was split into two parts:
+- Part 1: Core classes, enums, and data structures
+- Part 2: The DesignSystem class with all style methods
+
+### Key Features Implemented
+
+1. **Theme Inheritance System**: 
+   - ThemeDefinition class with parent theme support
+   - Built-in themes: default (dark), light, and glass
+   - Themes can inherit all values from parent and override specific ones
+   - Theme registry manages all available themes
+
+2. **Responsive Values**:
+   - ResponsiveValue class provides different values based on container width
+   - Breakpoints: small (<200px), medium (<400px), large (>=400px)
+   - Can be used for any numeric or string value
+
+3. **Component States**:
+   - All components now support state-based styling
+   - States: normal, hover, active, pressed, focused, disabled
+   - Proper visual feedback for all interactions
+
+4. **New Component Types**:
+   - Radio buttons with proper circle indicators
+   - Combo boxes with custom dropdown styling
+   - Spin boxes with integrated up/down buttons
+   - Tab widgets with modern tab styling
+   - Group boxes with floating titles
+
+5. **New Style Variants**:
+   - Glass: Glassmorphism effect with backdrop blur
+   - Outlined: Border-only buttons for minimal design
+
+### Design Decisions
+
+1. **CSS-in-Python**: Kept stylesheet generation in Python for type safety and IDE support
+2. **Theme Fallback**: Always falls back to default theme values if current theme missing a value
+3. **State Styles**: Included in base style methods rather than separate to reduce complexity
+4. **Version Bump**: Changed to 1.1.0 to indicate new features while maintaining compatibility
+### Base Tile Updates
+
+Completed the Phase 2.1 implementation by updating base_tile.py to support all new component types:
+
+1. **Radio Buttons**: Support group names for mutual exclusion
+2. **Combo Boxes**: Support items as strings or objects with data, editable mode
+3. **Spin Boxes**: Full numeric input with prefix/suffix and special values
+4. **Tab Widgets**: Complete tab management with nested component rendering
+5. **Group Boxes**: Collapsible groups with title and layout support
+
+The implementation maintains the same pattern as existing components, making them immediately available to all tile designs. Each component properly applies the design system styles based on variant and size parameters.
+
+### Event System Extensions
+
+Extended the event mapping system to handle:
+- `toggled`: For radio buttons and checkable elements
+- `current_changed`: For combo boxes and tab widgets
+- `tab_close_requested`: For closable tabs
+- `item_selected`: For future list/tree widgets
+
+This completes Phase 2.1 - all planned components now have full style and functional support.
+
+### Next Steps
+
+The design system is now feature-complete for Phase 2.1. The next step would be to update base_tile.py's ComponentFactory to support the new component types (radio, combo_box, spin_box, tab_widget, group_box) so they can be used in actual tile designs.
+
+After that, Phase 2.2 would involve creating the design validation framework with JSON schema support.

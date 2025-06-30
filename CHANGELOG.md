@@ -82,3 +82,75 @@
 
 ### Breaking Changes
 - None - Constraint validation is additive and doesn't break existing functionality
+
+
+## Session 4 - 30/06/2025 - Phase 2.1 Started
+**Phase**: 2.1 - Expand Design System Components
+**Duration**: In progress
+
+### Files Changed
+- **Modified**: `design_system.py` - Added theme inheritance system and new component styles
+  - Added ThemeDefinition class with parent theme support
+  - Added ResponsiveValue class for container-aware sizing
+  - Added ComponentState enum for state-based styling
+  - Added new ComponentType values: radio, combo_box, spin_box, tab_widget, group_box
+  - Added new StyleVariant values: glass, outlined
+  - Implemented theme registry with inheritance
+  - Added styles for all new component types
+- **Created**: `test_phase_2_1.py` - Test for new features
+  - Tests theme inheritance
+  - Tests responsive values
+  - Tests new component styles
+  - Tests component state styling
+
+### Breaking Changes
+- None - All changes are additive
+
+
+## Session 4 - 30/06/2025 - Phase 2.1 Completed
+**Phase**: 2.1 - Expand Design System Components
+**Duration**: 45 minutes
+
+### Files Changed
+- **Modified**: `design_system.py` - Complete overhaul with theme system and new components
+  - Added ThemeDefinition class with parent theme inheritance
+  - Added ResponsiveValue class for container-aware sizing
+  - Added ComponentState enum for state-based styling
+  - Added new ComponentType values: radio, combo_box, spin_box, tab_widget, group_box
+  - Added new StyleVariant values: glass, outlined
+  - Implemented theme registry with built-in themes (default, light, glass)
+  - Added complete styles for all new component types
+  - Enhanced existing styles with state support (hover, focus, disabled)
+  - Added theme value getters with fallback system
+  - Bumped version to 1.1.0
+- **Created**: `test_phase_2_1.py` - Comprehensive test of new features
+  - Tests theme inheritance mechanism
+  - Tests responsive value calculations
+  - Tests availability of new component styles
+  - Tests component state variations
+  - Creates visual test with new components (requires base_tile.py updates)
+- **Modified**: `base_tile.py` - Added support for new component types
+  - Added imports for new Qt widget types
+  - Added _create_radio method for radio buttons with group support
+  - Added _create_combo_box method with items, editable, and events
+  - Added _create_spin_box method with range, prefix/suffix support
+  - Added _create_tab_widget method with full tab management
+  - Added _create_group_box method with checkable and layout support
+  - Enhanced _map_events to handle toggled, current_changed, tab_close_requested
+- **Created**: `test_base_tile_new_components.py` - Integration test
+  - Tests all new component types working in actual tiles
+  - Demonstrates tab widget with multiple tabs
+  - Shows group boxes with different styles
+  - Tests event handling for new components
+### Breaking Changes
+- None - All changes are additive
+- Existing designs will continue to work
+- Default theme is automatically initialized
+
+### Key Improvements
+- Complete theme system allows easy creation of visual themes
+- Child themes can inherit from parent themes and override specific values
+- Responsive values enable components to adapt to container size
+- All component types now have proper styling
+- State-based styles provide better interactivity feedback
+- Glass morphism effects available for modern UI designs

@@ -9,15 +9,62 @@ PinPoint is a desktop application for creating floating widgets (tiles) that can
 3. **Plugin Architecture**: Support for third-party tile types and designs
 4. **Design Constraints**: Enforce rules to ensure tiles remain functional regardless of design
 5. **JSON-based Designs**: Visual designs defined in JSON files that can be created without coding
+6. **Maintainable Code Structure**: Keep files under 500 lines for readability and maintainability
 
-## Current State Analysis
-- ✅ Basic plugin system exists (plugin_registry.py)
-- ✅ Design system foundation present (design_system.py)
-- ✅ Tile manager supports design concepts
-- ⚠️ NoteTile still has embedded UI code
-- ⚠️ Design validation not fully implemented
-- ⚠️ No design editor/preview system
-- ⚠️ Limited design documentation
+## Critical Code Organization Rules
+
+### File Size Limits
+- **Hard limit**: No file should exceed 800 lines of code
+- **Soft limit**: Aim to keep files under 500 lines
+- **Target**: Most files should be 200-400 lines
+- **Exception**: Only allowed for generated code or data files
+
+### When to Split Files
+1. **At 400+ lines**: Start planning the split
+2. **At 500+ lines**: Must split in next refactoring
+3. **At 600+ lines**: Immediate split required
+4. **Multiple responsibilities**: Split even if under limit
+
+### How to Split Files
+1. **By responsibility**: Each file should have ONE primary purpose
+2. **By component type**: Separate widgets, logic, utilities
+3. **By feature**: Group related functionality
+4. **Common patterns**:
+   - `*_widget.py` - UI components
+   - `*_logic.py` - Business logic
+   - `*_utils.py` - Helper functions
+   - `*_types.py` - Type definitions and enums
+   - `*_factory.py` - Factory classes
+
+### Module Structure Guidelines
+```
+pinpoint/
+├── core/               # Core functionality (small, focused files)
+│   ├── __init__.py
+│   ├── types.py       # Core type definitions
+│   ├── events.py      # Event system
+│   └── validators.py  # Validation logic
+├── design/            # Design system modules
+│   ├── __init__.py
+│   ├── colors.py      # Color definitions
+│   ├── typography.py  # Typography system
+│   ├── spacing.py     # Spacing system
+│   ├── themes.py      # Theme management
+│   └── styles/        # Component styles
+│       ├── __init__.py
+│       ├── button_styles.py
+│       ├── input_styles.py
+│       └── container_styles.py
+├── components/        # Reusable UI components
+│   ├── __init__.py
+│   ├── factories/     # Component factories
+│   └── widgets/       # Custom widgets
+├── tiles/            # Tile implementations
+│   ├── __init__.py
+│   ├── base/         # Base tile functionality
+│   └── plugins/      # Tile plugins
+└── utils/            # Utilities and helpers
+```
 
 ## Implementation Checklist
 
@@ -44,13 +91,51 @@ PinPoint is a desktop application for creating floating widgets (tiles) that can
   - [x] Add meaningful error messages for constraint violations
 
 ### Phase 2: Design System Enhancement
-- [ ] **2.1 Expand Design System Components**
-  - [ ] Add remaining component styles (combo_box, slider, progress, etc.)
-  - [ ] Implement theme inheritance and overrides
-  - [ ] Add responsive sizing tokens (relative units)
-  - [ ] Create component state styles (hover, active, disabled, focused)
-  - [ ] Document all design tokens with examples
+- [x] **2.1 Expand Design System Components**
+  - [x] Add remaining component styles (combo_box, slider, progress, etc.)
+  - [x] Implement theme inheritance and overrides
+  - [x] Add responsive sizing tokens (relative units)
+  - [x] Create component state styles (hover, active, disabled, focused)
+  - [x] Document all design tokens with examples
+- [ ] **2.0 Code Restructuring (URGENT - Must do before continuing)**
+  - [ ] Split design_system.py into multiple modules
+  - [ ] Split base_tile.py into multiple modules
+  - [ ] Split tile_manager.py into multiple modules
+  - [ ] Create proper package structure
+  - [ ] Update all imports
+  - [ ] Add __init__.py files with proper exports
 
+### Restructuring Phase Details
+
+#### 2.0.1 Split design_system.py
+Current: ~850 lines → Target: 5-6 files of ~150-200 lines each
+- [ ] `design/core.py` - Core classes (DesignSystem, version, grid)
+- [ ] `design/types.py` - Enums and dataclasses
+- [ ] `design/themes.py` - Theme system and registry
+- [ ] `design/colors.py` - Color system and utilities
+- [ ] `design/styles/button_styles.py` - Button-related styles
+- [ ] `design/styles/input_styles.py` - Input component styles
+- [ ] `design/styles/container_styles.py` - Container and layout styles
+- [ ] `design/styles/display_styles.py` - Progress, slider, etc.
+- [ ] `design/validators.py` - Design validation logic
+
+#### 2.0.2 Split base_tile.py  
+Current: ~1000 lines → Target: 4-5 files of ~200-250 lines each
+- [ ] `tiles/base/core.py` - BaseTileCore class
+- [ ] `tiles/base/tile.py` - BaseTile class
+- [ ] `tiles/base/validators.py` - DesignValidator class
+- [ ] `components/factories/component_factory.py` - ComponentFactory
+- [ ] `components/factories/layout_factory.py` - LayoutFactory
+- [ ] `tiles/base/property_binding.py` - PropertyBinding system
+
+#### 2.0.3 Split tile_manager.py
+Current: ~600 lines → Target: 3-4 files of ~150-200 lines each
+- [ ] `tiles/manager/core.py` - Core TileManager class
+- [ ] `tiles/manager/storage.py` - Storage operations
+- [ ] `tiles/manager/layouts.py` - Layout management
+- [ ] `tiles/manager/live_tiles.py` - Live tile projection
+
+### Continuing Original Phases (After Restructuring)
 - [ ] **2.2 Create Design Validation Framework**
   - [ ] Build comprehensive JSON schema for design specs
   - [ ] Implement schema validation with detailed error reporting
@@ -170,6 +255,13 @@ PinPoint is a desktop application for creating floating widgets (tiles) that can
 
 ## Change Documentation Protocol
 
+### IMPORTANT: File Size Check
+Before making ANY changes, Claude MUST:
+1. Check the current line count of the file
+2. If over 400 lines, plan how to split it
+3. If over 500 lines, prioritize splitting over new features
+4. Document the line count in the change summary
+
 ### IMPORTANT: After Every Code Change
 When implementing any checklist item, Claude MUST provide:
 
@@ -180,9 +272,18 @@ When implementing any checklist item, Claude MUST provide:
 - **Created**: `new_file.py` - Purpose of new file
 - **Renamed**: `old.py` → `new.py` - Reason for rename
 - **Deleted**: `removed.py` - Why it was removed
+- **Split**: `large_file.py` (1000 lines) → `file1.py` (300 lines) + `file2.py` (400 lines) + `file3.py` (300 lines)
 ```
-
-2. **Breaking Changes Alert**
+2. **Module Structure Update**
+```markdown
+### New Module Structure:
+module_name/
+├── __init__.py (exports: ClassName, function_name)
+├── core.py (XXX lines) - Core functionality
+├── types.py (XXX lines) - Type definitions
+└── utils.py (XXX lines) - Helper functions
+```
+3. **Breaking Changes Alert**
 ```markdown
 ### Breaking Changes:
 - Import path changes
@@ -315,8 +416,6 @@ When continuing this refactoring:
 ### Where to Document Changes
 
 1. **Claude.md** (this file):
-   - Recent changes (last 3 sessions)
-   - Current session progress
    - Quick reference for active work
 
 2. **CHANGELOG.md** (separate file):
@@ -374,5 +473,41 @@ challenges faced, decisions made, and next steps]
 - [ ] Add notes to SESSION_NOTES.md
 - [ ] Commit with message: "[suggested message]"
 ```
+## Current Session Progress
+- Session started: 30/06/2025
+- Last checkpoint: Phase 2.1 completed
+- **URGENT**: Must restructure code before continuing
+- Next step: Phase 2.0 - Code Restructuring
+
+## Notes for Next Session
+When continuing this refactoring:
+1. **FIRST PRIORITY**: Check file sizes and restructure if needed
+2. Count lines in: design_system.py, base_tile.py, tile_manager.py
+3. Plan the module structure before implementing
+4. Update all imports across the codebase
+5. Ensure backward compatibility where possible
+6. Document the new structure clearly
+
+## Instructions for Claude
+
+### Your Responsibilities
+1. **Before Making Changes**: 
+   - Count lines in target files
+   - Check if restructuring is needed
+   - Plan module structure if splitting
+2. **During Implementation**: 
+   - Keep each file under 500 lines
+   - Create logical module structures
+   - Maintain clean APIs
+3. **After Each Change**: 
+   - Document line counts
+   - Update import examples
+   - Provide clear migration instructions
+
+### Restructuring Priority
+1. Files over 600 lines: IMMEDIATE split required
+2. Files over 500 lines: Split before adding features  
+3. Files over 400 lines: Plan split for next session
+4. New files: Design to stay under 300 lines
 
 This ensures consistent documentation across all Claude sessions.

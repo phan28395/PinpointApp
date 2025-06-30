@@ -22,12 +22,12 @@ PinPoint is a desktop application for creating floating widgets (tiles) that can
 ## Implementation Checklist
 
 ### Phase 1: Core Architecture Refactoring
-- [ ] **1.1 Complete Logic/UI Separation for NoteTile**
-  - [ ] Extract all QTextEdit creation/styling from NoteTile class
-  - [ ] Move UI creation to design spec renderer in BaseTile
-  - [ ] Ensure NoteTileLogic handles all business logic without Qt dependencies
-  - [ ] Test that NoteTile works with both embedded and external designs
-  - [ ] Document the separation pattern for other developers
+- [x] **1.1 Complete Logic/UI Separation for NoteTile**
+  - [x] Extract all QTextEdit creation/styling from NoteTile class
+  - [x] Move UI creation to design spec renderer in BaseTile
+  - [x] Ensure NoteTileLogic handles all business logic without Qt dependencies
+  - [x] Test that NoteTile works with both embedded and external designs
+  - [x] Document the separation pattern for other developers
 
 - [ ] **1.2 Enhance BaseTile Design Rendering**
   - [ ] Implement full component type support (all ComponentType enum values)

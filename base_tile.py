@@ -1,6 +1,7 @@
-# pinpoint/base_tile.py - Refactored to use Design System and support external designs
+# pinpoint/base_tile.py - Enhanced with better design rendering
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QFrame, QPushButton, QHBoxLayout, QLabel
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QFrame, QPushButton, QHBoxLayout, 
+                              QLabel, QTextEdit, QLineEdit, QSpacerItem, QSizePolicy)
 from PySide6.QtCore import Qt, Signal, QPoint
 from typing import Dict, Any, Optional
 from .design_system import DesignSystem, ComponentType, spacing, color
@@ -242,6 +243,46 @@ class BaseTile(BaseTileCore):
         # If a design spec is provided, render it
         if self.design_spec:
             self.render_design_spec(self.design_spec)
+        else:
+            # Load default design for this tile type
+            self._load_default_design()
+            
+    def _load_default_design(self):
+        """Load the default design for this tile type."""
+        # Get the plugin registry to find default designs
+        from .plugins.plugin_registry import get_registry
+        registry = get_registry()
+        
+        tile_type = self.tile_data.get('type', 'note')
+        plugin = registry.get_plugin(tile_type)
+        
+        if plugin:
+            # Get builtin designs
+            builtin_designs = plugin.get_builtin_designs()
+            if builtin_designs:
+                # Use the first design as default
+                default_design = builtin_designs[0]
+                self.render_design_spec(default_design)
+            else:
+                # No designs available, create minimal default
+                self._create_minimal_default()
+        else:
+            self._create_minimal_default()
+            
+    def _create_minimal_default(self):
+        """Create a minimal default UI when no design is available."""
+        # For note tiles, create a basic text edit
+        if self.tile_data.get('type') == 'note':
+            text_edit = QTextEdit()
+            text_edit.setObjectName("noteTextEdit")
+            text_edit.setStyleSheet(DesignSystem.get_text_edit_style())
+            self.content_layout.addWidget(text_edit)
+        else:
+            # For other tiles, just show a label
+            label = QLabel(f"{self.tile_data.get('type', 'Unknown')} Tile")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            label.setStyleSheet(DesignSystem.get_label_style())
+            self.content_layout.addWidget(label)
             
     def render_design_spec(self, spec: Dict[str, Any]):
         """
@@ -294,6 +335,12 @@ class BaseTile(BaseTileCore):
                 # Connect to tile action handler
                 widget.clicked.connect(lambda: self.handle_action(comp_spec['action']))
                 
+        elif comp_type == ComponentType.TEXT_EDIT.value:
+            widget = QTextEdit()
+            if comp_spec.get('read_only', False):
+                widget.setReadOnly(True)
+            widget.setPlaceholderText(comp_spec.get('placeholder', ''))
+                
         elif comp_type == ComponentType.CONTAINER.value:
             widget = QFrame()
             # Recursively render container contents
@@ -302,6 +349,17 @@ class BaseTile(BaseTileCore):
                 layout_spec = {'components': comp_spec['components']}
                 self._render_layout(layout_spec, container_layout)
                 
+        elif comp_type == ComponentType.SPACER.value:
+            # Create a spacer item instead of a widget
+            spacer = QSpacerItem(
+                comp_spec.get('width', 0),
+                comp_spec.get('height', 0),
+                QSizePolicy.Policy.Expanding if comp_spec.get('horizontal', True) else QSizePolicy.Policy.Minimum,
+                QSizePolicy.Policy.Expanding if comp_spec.get('vertical', True) else QSizePolicy.Policy.Minimum
+            )
+            parent_layout.addItem(spacer)
+            return None  # Spacer is not a widget
+            
         # Add more component types as needed...
         
         if widget:

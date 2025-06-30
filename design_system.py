@@ -195,7 +195,20 @@ class DesignSystem:
         """
         method_name = f'get_{component_type}_style'
         if hasattr(cls, method_name):
-            return getattr(cls, method_name)(variant, **kwargs)
+            # Get the method
+            method = getattr(cls, method_name)
+            # Check method signature to see what parameters it accepts
+            import inspect
+            sig = inspect.signature(method)
+            params = sig.parameters
+            
+            # Filter kwargs to only include parameters the method accepts
+            filtered_kwargs = {}
+            for key, value in kwargs.items():
+                if key in params:
+                    filtered_kwargs[key] = value
+                    
+            return method(variant, **filtered_kwargs)
         return ""
     
     @classmethod
@@ -262,21 +275,34 @@ class DesignSystem:
         """
     
     @classmethod
-    def get_text_edit_style(cls, variant: str = 'primary') -> str:
+    def get_text_edit_style(cls, variant: str = 'primary', size: str = 'md') -> str:
         """Generate QTextEdit stylesheet."""
+        # Determine font size based on size parameter
+        font_size = cls.TYPOGRAPHY['font_size'].get(size, cls.TYPOGRAPHY['font_size']['md'])
+        
+        # Determine colors based on variant
+        if variant == 'transparent':
+            bg_color = 'transparent'
+            border_color = 'transparent'
+            focus_border_color = cls.COLORS['accent']
+        else:
+            bg_color = cls.COLORS['bg_secondary']
+            border_color = cls.COLORS['border_subtle']
+            focus_border_color = cls.COLORS['accent']
+        
         return f"""
             QTextEdit {{
-                background-color: {cls.COLORS['bg_secondary']};
+                background-color: {bg_color};
                 color: {cls.COLORS['text_primary']};
-                border: 1px solid {cls.COLORS['border_subtle']};
+                border: 1px solid {border_color};
                 border-radius: {cls.RADIUS['md']}px;
                 padding: {cls.SPACING['sm']}px;
                 font-family: {cls.TYPOGRAPHY['font_family']['default']};
-                font-size: {cls.TYPOGRAPHY['font_size']['md']}px;
+                font-size: {font_size}px;
                 selection-background-color: {cls.COLORS['accent_muted']};
             }}
             QTextEdit:focus {{
-                border-color: {cls.COLORS['accent']};
+                border-color: {focus_border_color};
             }}
         """
     

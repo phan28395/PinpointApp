@@ -1,4 +1,4 @@
-# pinpoint/note_tile.py - Refactored to separate logic from design
+# pinpoint/note_tile.py - Fully separated logic from UI
 
 from PySide6.QtWidgets import QTextEdit
 from PySide6.QtCore import QTimer
@@ -61,96 +61,60 @@ class NoteTileLogic:
     def get_content(self) -> str:
         """Get current content."""
         return self.content
+
+
 class NoteTile(BaseTile):
     """
     Note tile implementation using the new architecture.
+    All UI is now handled by the design system.
     """
     
     def __init__(self, tile_data: Dict[str, Any]):
-        # Debug print
-        print(f"NoteTile.__init__ called with tile_data keys: {tile_data.keys()}")
-        print(f"Content in tile_data: '{tile_data.get('content', '')}'")
-        
         # Initialize logic component
         tile_id = tile_data.get("id", "unknown")
         content = tile_data.get("content", "")
         
-        print(f"Creating NoteTileLogic with tile_id='{tile_id}', content='{content}'")
         self.logic = NoteTileLogic(tile_id, content)
-        
-        # Set up logic callback
+        # Initialize base tile - let it handle all UI creation
+        super().__init__(tile_data)
         self.logic.set_update_callback(self._on_content_change)
         
-        # Store reference to main text widget
-        self.text_edit: Optional[QTextEdit] = None
+        # Store reference to text widget for efficient access
+        self._text_widget = None
         
-        # IMPORTANT: Remove design_spec to force embedded design
-        # This ensures the text widget is created properly
-        tile_data_copy = tile_data.copy()
-        if 'design_spec' in tile_data_copy:
-            print("Removing design_spec to force embedded design")
-            del tile_data_copy['design_spec']
-        
-        # Initialize base tile WITHOUT design spec
-        super().__init__(tile_data_copy)
-        
-        # Always create default embedded design
-        print("Creating default embedded design")
-        self._create_default_design()
-        
-        # Connect the text widget to logic
-        self._connect_text_widget()
-        
-        # Debug: Check if text_edit was created and has content
-        if self.text_edit:
-            print(f"text_edit created successfully, current text: '{self.text_edit.toPlainText()}'")
-        else:
-            print("ERROR: text_edit was not created!")
 
-    def _create_default_design(self):
-        """Creates the default note tile design (embedded approach)."""
-        print("_create_default_design called")
         
-        # Create text edit widget
-        self.text_edit = QTextEdit()
-        self.text_edit.setObjectName("noteTextEdit")
+        # After UI is created by base class, connect to the text widget if it exists
+        self._connect_to_text_widget()
         
-        # Set the content from logic IMMEDIATELY
-        content = self.logic.get_content()
-        print(f"Setting initial content in text_edit: '{content}'")
-        self.text_edit.setPlainText(content)
+    def _connect_to_text_widget(self):
+        """Connect to the text widget created by the design system."""
+        # Find the text edit widget created by the design
+        text_widget = self.get_component("noteTextEdit")
         
-        # Apply design system styling
-        self.text_edit.setStyleSheet(DesignSystem.get_text_edit_style())
-        
-        # Add to content area
-        if hasattr(self, 'content_layout') and self.content_layout:
-            self.content_layout.addWidget(self.text_edit)
-            print("text_edit added to content_layout successfully")
-        else:
-            print("ERROR: content_layout not found!")
-
-    def _connect_text_widget(self):
-        """Connect text widget to logic."""
-        print("_connect_text_widget called")
-        
-        if self.text_edit:
+        if text_widget and isinstance(text_widget, QTextEdit):
+            # Set initial content
+            text_widget.setPlainText(self.logic.get_content())
+            
             # Connect change signal
-            self.text_edit.textChanged.connect(self._on_text_changed)
-            print("Connected textChanged signal")
+            text_widget.textChanged.connect(self._on_text_changed)
+            
+            # Store reference for updates
+            self._text_widget = text_widget
         else:
-            print("ERROR: text_edit is None in _connect_text_widget!")
-
+            print(f"Warning: No text edit widget found with id 'noteTextEdit'")
+            self._text_widget = None
+    
     def _on_text_changed(self):
         """Handle text changes from UI."""
-        if self.text_edit and not self.logic.is_updating:
-            new_text = self.text_edit.toPlainText()
+        if self._text_widget and not self.logic.is_updating:
+            new_text = self._text_widget.toPlainText()
             self.logic.handle_text_change(new_text)
-
+    
     def _on_content_change(self, tile_id: str, content: str):
         """Handle content changes from logic."""
         self.tile_content_changed.emit(tile_id, content)
-
+    
     def update_display_content(self, tile_data: Dict[str, Any]):
         """Update content from external source (e.g., studio sync)."""
         if self.tile_id != tile_data.get('id'):
@@ -161,31 +125,49 @@ class NoteTile(BaseTile):
         # Update logic
         if self.logic.update_content_external(new_content):
             # Update UI if content changed
-            if self.text_edit:
+            if self._text_widget:
                 # Store cursor position
-                cursor = self.text_edit.textCursor()
+                cursor = self._text_widget.textCursor()
                 cursor_position = cursor.position()
                 
                 # Update text
-                self.text_edit.setPlainText(new_content)
+                self._text_widget.setPlainText(new_content)
                 
                 # Restore cursor position
                 if cursor_position <= len(new_content):
                     cursor.setPosition(cursor_position)
-                    self.text_edit.setTextCursor(cursor)
-
+                    self._text_widget.setTextCursor(cursor)
+    
     def handle_action(self, action: str):
         """Handle actions from design spec components."""
         if action == "clear":
-            if self.text_edit:
-                self.text_edit.clear()
+            if self._text_widget:
+                self._text_widget.clear()
         elif action == "copy":
-            if self.text_edit:
-                self.text_edit.copy()
+            if self._text_widget:
+                self._text_widget.copy()
         elif action == "paste":
-            if self.text_edit:
-                self.text_edit.paste()
-
+            if self._text_widget:
+                self._text_widget.paste()
+        elif action == "select_all":
+            if self._text_widget:
+                self._text_widget.selectAll()
+        elif action == "undo":
+            if self._text_widget:
+                self._text_widget.undo()
+        elif action == "redo":
+            if self._text_widget:
+                self._text_widget.redo()
+    
+    def update_component_data(self, component_id: str, data: Any):
+        """Update data for specific components (for designs with multiple components)."""
+        if component_id == "wordCountLabel":
+            # Calculate word count
+            word_count = len(self.logic.get_content().split())
+            super().update_component_data(component_id, f"{word_count} words")
+        else:
+            super().update_component_data(component_id, data)
+    
     def closeEvent(self, event):
         """Ensure pending updates are sent before closing."""
         # Stop the timer and emit any pending changes

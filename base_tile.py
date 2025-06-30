@@ -1,13 +1,225 @@
-# pinpoint/base_tile.py - Enhanced with complete design rendering system
+# pinpoint/base_tile.py - Enhanced with complete design constraints validation
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QFrame, 
                               QPushButton, QLabel, QTextEdit, QLineEdit, QSpacerItem, 
-                              QSizePolicy, QProgressBar, QSlider, QCheckBox, QLayout)
+                              QSizePolicy, QProgressBar, QSlider, QCheckBox, QLayout,
+                              QScrollArea)
 from PySide6.QtCore import Qt, Signal, QPoint, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon
-from typing import Dict, Any, Optional, Callable, List, Union
-from .design_system import DesignSystem, ComponentType, spacing, color
+from typing import Dict, Any, Optional, Callable, List, Union, Tuple
+from design_system import DesignSystem, ComponentType, spacing, color, DesignConstraints
 import weakref
+
+
+class DesignValidator:
+    """
+    Validates design specifications against tile constraints.
+    Provides detailed error messages for debugging.
+    """
+    
+    def __init__(self, tile_type: str, constraints: Optional[DesignConstraints] = None):
+        self.tile_type = tile_type
+        self.constraints = constraints or DesignConstraints()
+        self.errors: List[str] = []
+        self.warnings: List[str] = []
+        
+    def validate(self, spec: Dict[str, Any]) -> Tuple[bool, List[str], List[str]]:
+        """
+        Validate a complete design specification.
+        Returns (is_valid, errors, warnings)
+        """
+        self.errors.clear()
+        self.warnings.clear()
+        
+        # Check version compatibility first
+        self._validate_version_compatibility(spec)
+        
+        # Validate basic structure
+        is_structurally_valid, structural_errors = DesignSystem.validate_design_spec(spec)
+        self.errors.extend(structural_errors)
+        
+        if not is_structurally_valid:
+            return False, self.errors, self.warnings
+            
+        # Validate against constraints
+        self._validate_size_constraints(spec)
+        self._validate_component_constraints(spec)
+        self._validate_required_components(spec)
+        self._validate_nesting_depth(spec)
+        
+        return len(self.errors) == 0, self.errors, self.warnings
+        
+    def _validate_version_compatibility(self, spec: Dict[str, Any]):
+        """Check if the design is compatible with current system version."""
+        if 'metadata' not in spec:
+            self.errors.append("Design metadata is missing")
+            return
+            
+        metadata = spec['metadata']
+        compatible_with = metadata.get('compatible_with', '1.0.0')
+        
+        # Parse versions (simplified - in production use proper semver)
+        try:
+            design_major, design_minor, design_patch = map(int, compatible_with.split('.'))
+            system_major, system_minor, system_patch = map(int, DesignSystem.VERSION.split('.'))
+            
+            # Major version must match
+            if design_major != system_major:
+                self.errors.append(
+                    f"Design requires design system v{compatible_with}, "
+                    f"but current system is v{DesignSystem.VERSION}. "
+                    f"Major version mismatch prevents compatibility."
+                )
+            # Minor version of design can't be newer than system
+            elif design_minor > system_minor:
+                self.errors.append(
+                    f"Design requires features from design system v{compatible_with}, "
+                    f"but current system is v{DesignSystem.VERSION}. "
+                    f"Please update the design system."
+                )
+            # Patch differences are just warnings
+            elif design_patch > system_patch:
+                self.warnings.append(
+                    f"Design was created for v{compatible_with}, "
+                    f"current system is v{DesignSystem.VERSION}. "
+                    f"Minor compatibility issues may occur."
+                )
+        except (ValueError, AttributeError):
+            self.errors.append(
+                f"Invalid version format in design: '{compatible_with}'. "
+                f"Expected format: MAJOR.MINOR.PATCH (e.g., 1.0.0)"
+            )
+            
+    def _validate_size_constraints(self, spec: Dict[str, Any]):
+        """Validate size constraints from styling or layout specs."""
+        styling = spec.get('styling', {})
+        
+        # Check if explicit sizes are specified
+        if 'size' in styling:
+            size = styling['size']
+            if isinstance(size, dict):
+                width = size.get('width')
+                height = size.get('height')
+                
+                if width is not None:
+                    if width < self.constraints.min_width:
+                        self.errors.append(
+                            f"Design width ({width}px) is below minimum "
+                            f"constraint ({self.constraints.min_width}px)"
+                        )
+                    elif width > self.constraints.max_width:
+                        self.errors.append(
+                            f"Design width ({width}px) exceeds maximum "
+                            f"constraint ({self.constraints.max_width}px)"
+                        )
+                        
+                if height is not None:
+                    if height < self.constraints.min_height:
+                        self.errors.append(
+                            f"Design height ({height}px) is below minimum "
+                            f"constraint ({self.constraints.min_height}px)"
+                        )
+                    elif height > self.constraints.max_height:
+                        self.errors.append(
+                            f"Design height ({height}px) exceeds maximum "
+                            f"constraint ({self.constraints.max_height}px)"
+                        )
+                        
+    def _validate_component_constraints(self, spec: Dict[str, Any]):
+        """Validate that only allowed component types are used."""
+        layout = spec.get('layout', {})
+        self._check_components_in_layout(layout, "root")
+        
+    def _check_components_in_layout(self, layout: Dict[str, Any], path: str):
+        """Recursively check component types in a layout."""
+        components = layout.get('components', [])
+        
+        for i, comp in enumerate(components):
+            comp_type = comp.get('type')
+            comp_path = f"{path}.components[{i}]"
+            
+            if comp_type:
+                try:
+                    component_enum = ComponentType(comp_type)
+                    # Check if this component type is allowed
+                    if self.constraints.allowed_components:
+                        if component_enum not in self.constraints.allowed_components:
+                            self.errors.append(
+                                f"{comp_path}: Component type '{comp_type}' is not allowed "
+                                f"for {self.tile_type} tiles. Allowed types: "
+                                f"{[c.value for c in self.constraints.allowed_components]}"
+                            )
+                except ValueError:
+                    # This error is already caught by basic validation
+                    pass
+                    
+            # Recurse into containers
+            if comp_type == ComponentType.CONTAINER.value and 'components' in comp:
+                self._check_components_in_layout(
+                    {'components': comp['components']}, 
+                    f"{comp_path}"
+                )
+                
+    def _validate_required_components(self, spec: Dict[str, Any]):
+        """Ensure all required components are present."""
+        if not self.constraints.required_components:
+            return
+            
+        # Collect all component IDs
+        found_ids = set()
+        layout = spec.get('layout', {})
+        self._collect_component_ids(layout, found_ids)
+        
+        # Check for missing required components
+        for required_id in self.constraints.required_components:
+            if required_id not in found_ids:
+                self.errors.append(
+                    f"Required component '{required_id}' is missing from the design. "
+                    f"{self.tile_type} tiles must include: {self.constraints.required_components}"
+                )
+                
+    def _collect_component_ids(self, layout: Dict[str, Any], found_ids: set):
+        """Recursively collect all component IDs."""
+        components = layout.get('components', [])
+        
+        for comp in components:
+            comp_id = comp.get('id')
+            if comp_id:
+                found_ids.add(comp_id)
+                
+            # Recurse into containers
+            if comp.get('type') == ComponentType.CONTAINER.value and 'components' in comp:
+                self._collect_component_ids(
+                    {'components': comp['components']}, 
+                    found_ids
+                )
+                
+    def _validate_nesting_depth(self, spec: Dict[str, Any]):
+        """Validate that component nesting doesn't exceed maximum depth."""
+        layout = spec.get('layout', {})
+        max_depth = self._calculate_max_depth(layout, 0)
+        
+        if max_depth > self.constraints.max_component_depth:
+            self.errors.append(
+                f"Component nesting depth ({max_depth}) exceeds maximum "
+                f"allowed depth ({self.constraints.max_component_depth}). "
+                f"Reduce the number of nested containers."
+            )
+            
+    def _calculate_max_depth(self, layout: Dict[str, Any], current_depth: int) -> int:
+        """Calculate the maximum nesting depth in a layout."""
+        components = layout.get('components', [])
+        max_depth = current_depth
+        
+        for comp in components:
+            if comp.get('type') == ComponentType.CONTAINER.value and 'components' in comp:
+                container_depth = self._calculate_max_depth(
+                    {'components': comp['components']}, 
+                    current_depth + 1
+                )
+                max_depth = max(max_depth, container_depth)
+                
+        return max_depth
 
 
 class ComponentFactory:
@@ -542,7 +754,7 @@ class BaseTileCore(QWidget):
 class BaseTile(BaseTileCore):
     """
     The base tile class that plugins extend.
-    This adds the design specification support on top of core functionality.
+    This adds the design specification support with constraints validation.
     """
     
     def __init__(self, tile_data: Dict[str, Any]):
@@ -562,10 +774,13 @@ class BaseTile(BaseTileCore):
         # Event handlers registry
         self._event_handlers: Dict[str, List[Callable]] = {}
         
+        # Error display widget (for constraint violations)
+        self._error_widget = None
+        
         # Initialize core functionality
         super().__init__(tile_data)
         
-        # If a design spec is provided, render it
+        # If a design spec is provided, render it with validation
         if self.design_spec:
             self.render_design_spec(self.design_spec)
         else:
@@ -612,11 +827,21 @@ class BaseTile(BaseTileCore):
             
     def render_design_spec(self, spec: Dict[str, Any]):
         """
-        Renders a design specification into the content area.
-        This is what allows third-party designs to work.
+        Renders a design specification with full constraint validation.
         """
-        # Validate the design spec first
-        is_valid, errors = DesignSystem.validate_design_spec(spec)
+        # Get constraints for this tile type
+        constraints = self._get_tile_constraints()
+        
+        # Validate the design with constraints
+        validator = DesignValidator(self.tile_type, constraints)
+        is_valid, errors, warnings = validator.validate(spec)
+        
+        # Show warnings if any (but continue rendering)
+        if warnings:
+            for warning in warnings:
+                print(f"Design Warning: {warning}")
+        
+        # If there are errors, show them and stop
         if not is_valid:
             self._show_design_errors(errors)
             return
@@ -626,6 +851,9 @@ class BaseTile(BaseTileCore):
         
         # Clear component registry
         self._components.clear()
+        
+        # Apply size constraints from design
+        self._apply_size_constraints(spec)
         
         # Process bindings if specified
         if 'bindings' in spec:
@@ -641,6 +869,44 @@ class BaseTile(BaseTileCore):
         
         # Initialize bound data
         self._initialize_bound_data()
+        
+    def _get_tile_constraints(self) -> DesignConstraints:
+        """Get constraints for this tile type from the plugin."""
+        from .plugins.plugin_registry import get_registry
+        registry = get_registry()
+        
+        plugin = registry.get_plugin(self.tile_type)
+        if plugin:
+            metadata = plugin.get_metadata()
+            if metadata and metadata.design_constraints:
+                return metadata.design_constraints
+                
+        # Return default constraints
+        return DesignConstraints()
+        
+    def _apply_size_constraints(self, spec: Dict[str, Any]):
+        """Apply size constraints from the design specification."""
+        styling = spec.get('styling', {})
+        if 'size' in styling:
+            size = styling['size']
+            if isinstance(size, dict):
+                width = size.get('width')
+                height = size.get('height')
+                
+                # Get current constraints
+                constraints = self._get_tile_constraints()
+                
+                # Apply width constraints
+                if width is not None:
+                    # Clamp to allowed range
+                    width = max(constraints.min_width, min(width, constraints.max_width))
+                    self.resize(width, self.height())
+                    
+                # Apply height constraints
+                if height is not None:
+                    # Clamp to allowed range
+                    height = max(constraints.min_height, min(height, constraints.max_height))
+                    self.resize(self.width(), height)
         
     def _render_layout(self, layout_spec: Dict[str, Any], parent_widget: QWidget):
         """Recursively renders a layout specification."""
@@ -843,19 +1109,70 @@ class BaseTile(BaseTileCore):
     def _show_design_errors(self, errors: list):
         """Shows design validation errors in the content area."""
         self.clear_content()
-        error_label = QLabel("\n".join([
-            "❌ Design Specification Errors:",
-            "",
-            *errors
-        ]))
-        error_label.setWordWrap(True)
-        error_label.setStyleSheet(DesignSystem.get_label_style('error'))
-        self.content_layout.addWidget(error_label)
+        
+        # Create scrollable error display
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                background-color: rgba(255, 0, 0, 0.1);
+                border: 2px solid #f87171;
+                border-radius: 8px;
+            }
+        """)
+        
+        error_widget = QWidget()
+        error_layout = QVBoxLayout(error_widget)
+        
+        # Title
+        title_label = QLabel("❌ Design Validation Failed")
+        title_label.setStyleSheet("""
+            QLabel {
+                color: #f87171;
+                font-size: 16px;
+                font-weight: bold;
+                padding: 8px;
+            }
+        """)
+        error_layout.addWidget(title_label)
+        
+        # Error list
+        for error in errors:
+            error_label = QLabel(f"• {error}")
+            error_label.setWordWrap(True)
+            error_label.setStyleSheet("""
+                QLabel {
+                    color: #fca5a5;
+                    font-size: 13px;
+                    padding: 4px 8px;
+                }
+            """)
+            error_layout.addWidget(error_label)
+            
+        # Help text
+        help_label = QLabel("\nPlease fix these errors in your design specification.")
+        help_label.setStyleSheet("""
+            QLabel {
+                color: #fbbf24;
+                font-size: 12px;
+                padding: 8px;
+            }
+        """)
+        error_layout.addWidget(help_label)
+        
+        error_layout.addStretch()
+        
+        scroll_area.setWidget(error_widget)
+        self.content_layout.addWidget(scroll_area)
+        self._error_widget = scroll_area
         
     def clear_content(self):
         """Clears all widgets from the content area."""
         # Clear components registry
         self._components.clear()
+        
+        # Clear error widget reference
+        self._error_widget = None
         
         # Clear layout
         while self.content_layout.count():

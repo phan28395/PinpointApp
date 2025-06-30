@@ -168,6 +168,88 @@ PinPoint is a desktop application for creating floating widgets (tiles) that can
   - [ ] Implement telemetry (opt-in)
   - [ ] Prepare marketing materials
 
+## Change Documentation Protocol
+
+### IMPORTANT: After Every Code Change
+When implementing any checklist item, Claude MUST provide:
+
+1. **File Change Summary**
+```markdown
+### Files Changed:
+- **Modified**: `filename.py` - Brief description of changes
+- **Created**: `new_file.py` - Purpose of new file
+- **Renamed**: `old.py` → `new.py` - Reason for rename
+- **Deleted**: `removed.py` - Why it was removed
+```
+
+2. **Breaking Changes Alert**
+```markdown
+### Breaking Changes:
+- Import path changes
+- API modifications
+- Data structure updates
+- Required migration steps
+```
+
+3. **Update Instructions**
+```markdown
+### To Apply These Changes:
+1. Save the provided code to [filename]
+2. Update imports in [affected files]
+3. Run tests to verify
+4. Update the checklist item as complete
+```
+
+4. **Session Log Entry**
+```markdown
+### Session Log Entry:
+**Date**: [Current Date]
+**Phase**: [Current Phase]
+**Completed**: [What was accomplished]
+**Next Steps**: [What to do next]
+**Notes**: [Any important observations]
+```
+
+### Example Change Documentation
+After implementing Phase 1.1, Claude should provide:
+
+```markdown
+## Changes Applied - Phase 1.1
+
+### Files Changed:
+- **Modified**: `note_tile.py` - Removed UI code, now uses NoteTileLogic
+- **Modified**: `base_tile.py` - Added render_design_spec() method
+- **Created**: `note_tile_logic.py` - Extracted business logic
+- **Modified**: `note_editor_widget.py` - Updated to use NoteTileLogic
+
+### Breaking Changes:
+- NoteTile no longer creates QTextEdit directly
+- UI customization must use design specs
+- Import `NoteTileLogic` for logic-only access
+
+### To Apply These Changes:
+1. Save all provided files
+2. Update any custom note tile extensions
+3. Test note creation and editing
+4. Mark Phase 1.1 as complete in checklist
+
+### Session Log Entry:
+**Date**: 2024-XX-XX
+**Phase**: 1.1 - Logic/UI Separation
+**Completed**: Separated NoteTile logic from presentation
+**Next Steps**: Begin Phase 1.2 - Enhance BaseTile Design Rendering
+**Notes**: All tests passing, ready for design system work
+```
+
+## File Change Log
+
+### Recent Changes (Last 3 Sessions)
+[Keep only recent changes here for quick reference]
+
+### Complete Change History
+See `CHANGELOG.md` in the project root for full file change history.
+See `SESSION_NOTES.md` for detailed session-by-session implementation notes.
+
 ## Implementation Notes
 
 ### Priority Order
@@ -206,7 +288,91 @@ PinPoint is a desktop application for creating floating widgets (tiles) that can
 ## Notes for Next Session
 When continuing this refactoring:
 1. Check the current state of the codebase
-2. Review completed items in this checklist
-3. Continue with the next unchecked item
-4. Update progress after each completed task
-5. Document any decisions or changes made
+2. Review `CHANGELOG.md` for complete file change history
+3. Review `SESSION_NOTES.md` for implementation details and decisions
+4. Check completed items in this checklist
+5. Continue with the next unchecked item
+6. Update progress after each completed task
+7. Document changes in both Claude.md (recent) and CHANGELOG.md (complete)
+
+## Instructions for Claude
+
+### Your Responsibilities
+1. **Before Making Changes**: 
+   - Review the Recent Changes section below
+   - Check `CHANGELOG.md` if you need older change history
+   - Check `SESSION_NOTES.md` for implementation context
+2. **During Implementation**: Track all file modifications
+3. **After Each Change**: 
+   - Provide complete change documentation (see protocol above)
+   - Update the Recent Changes section in Claude.md
+   - Provide entry for CHANGELOG.md
+4. **End of Session**: 
+   - Update Recent Changes in Claude.md
+   - Provide complete session summary for CHANGELOG.md
+   - Provide detailed notes for SESSION_NOTES.md
+
+### Where to Document Changes
+
+1. **Claude.md** (this file):
+   - Recent changes (last 3 sessions)
+   - Current session progress
+   - Quick reference for active work
+
+2. **CHANGELOG.md** (separate file):
+   ```markdown
+   # Complete file change history
+   # Format: Session-by-session breakdown
+   # Include: Files changed, breaking changes, migration notes
+   ```
+
+3. **SESSION_NOTES.md** (separate file):
+   ```markdown
+   # Detailed implementation notes
+   # Format: Narrative style with context
+   # Include: Decisions made, problems solved, future considerations
+   ```
+
+### Documentation Template
+Always end your response with:
+```markdown
+---
+## 📝 Change Summary for Human
+
+### Files to Update:
+[List all files that need to be saved/modified]
+
+### Quick Apply Steps:
+1. [Specific action]
+2. [Specific action]
+3. [Test to run]
+
+### For CHANGELOG.md:
+```
+## Session [X] - [Date]
+**Phase**: [Current Phase]
+**Duration**: [Estimated time]
+
+### Files Changed
+- [File changes with descriptions]
+
+### Breaking Changes
+- [Any breaking changes]
+```
+
+### For SESSION_NOTES.md:
+```
+## Session [X] - [Date]
+[Narrative description of what was accomplished, 
+challenges faced, decisions made, and next steps]
+```
+
+### Checklist Update:
+- [ ] Mark [specific item] as complete
+- [ ] Update Recent Changes in Claude.md
+- [ ] Add entry to CHANGELOG.md
+- [ ] Add notes to SESSION_NOTES.md
+- [ ] Commit with message: "[suggested message]"
+```
+
+This ensures consistent documentation across all Claude sessions.

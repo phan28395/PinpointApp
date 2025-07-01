@@ -7,6 +7,8 @@ from .events import EventBus, EventError, get_event_bus, configure_event_bus
 from .logger import Logger, LogLevel, get_logger, configure_global_logger
 from .tile_manager import TileManager
 from .tile_registry import TileRegistry, TileTypeInfo, get_tile_registry
+from .layout_manager import LayoutManager, TileInstance
+from .display_manager import DisplayManager, DisplayInfo, get_display_manager
 
 __all__ = [
     # Constants
@@ -36,4 +38,10 @@ __all__ = [
     
     # Tile Management
     'TileManager', 'TileRegistry', 'TileTypeInfo', 'get_tile_registry',
+    
+    # Layout Management
+    'LayoutManager', 'TileInstance',
+    
+    # Display Management
+    'DisplayManager', 'DisplayInfo', 'get_display_manager',
 ]

@@ -7,6 +7,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Session 5: Layout Management - 2024-12-19
+
+#### Added
+- **Layout Management System**
+  - `core/layout_manager.py` - Event-driven layout manager (245 lines)
+  - CRUD operations for layouts
+  - Tile instance management within layouts
+  - Event emission for all layout changes
+  - Storage abstraction usage
+
+- **Display Abstraction**
+  - `core/display_manager.py` - Display manager without Qt dependencies (200 lines)
+  - Mock display data for testing
+  - Display selection and information
+  - Multi-monitor support abstractions
+  - Display bounds calculations
+
+- **Data Structures**
+  - `TileInstance` dataclass for tile arrangements
+  - `DisplayInfo` dataclass for display properties
+  - Conversion methods to/from dictionaries
+
+- **Testing**
+  - `tests/test_session5_simple.py` - Layout and display tests (260 lines)
+  - 10 comprehensive tests
+  - Event emission verification
+  - Error handling coverage
+
+#### Changed
+- **Core Module Updates**
+  - `core/__init__.py` - Added layout and display exports
+
+#### Design Decisions
+- **Event-Driven Layouts**: All layout changes emit events for UI updates
+- **Display Abstraction**: No Qt dependencies in core display logic
+- **Instance vs Definition**: Clear separation between tile definitions and instances
+- **Mock Displays**: Testing without real display queries
+- **Immediate Save**: Structural changes (add/remove) save immediately
+
+#### Implementation Details
+- Layout IDs use UUID for uniqueness
+- Tile instances have their own IDs separate from tile IDs
+- Display manager uses 0-based indexing
+- Layout projection emits event for UI to handle
+- Display info includes position, size, and scale factor
+
+#### Architecture Benefits
+- **UI Agnostic**: Core layout logic has no UI dependencies
+- **Multi-Display Ready**: Abstractions support multiple monitors
+- **Event Integration**: Seamless integration with event bus
+- **Testable**: Pure business logic without display dependencies
+- **Flexible**: Layouts can target any display
+
+#### Data Structure
+```python
+Layout = {
+    "id": "layout_xxx",
+    "name": "My Layout",
+    "tile_instances": [
+        {
+            "instance_id": "inst_xxx",
+            "tile_id": "tile_xxx",
+            "x": 100, "y": 200,
+            "width": 250, "height": 150
+        }
+    ],
+    "display_settings": {
+        "target_display": 0,
+        "display_info": {...}
+    },
+    "settings": {
+        "theme": "default",
+        "overlappable": true,
+        "start_with_system": false
+    }
+}
+```
+
+#### Known Limitations
+- Mock display data (real implementation needs OS queries)
+- No layout templates or presets
+- No collision detection for tile placement
+- No layout constraints or alignment tools
+- No undo/redo for layout changes
+- Display refresh is manual
+
+#### Metrics
+- Total new lines of code: 705
+- Test coverage: All public APIs tested
+- Event types: 4 layout events
+- Mock displays: 2 (for testing)
+- File count: 3 files (2 new, 1 updated)
+
+#### Migration Path
+- Existing layout data structure is preserved
+- Display manager can replace Qt-based display queries
+- Layout editor can be updated to use new manager
+- Events enable gradual UI migration
+
+#### Next Steps
+- Session 6: Design system foundation
+- Session 7: Error handling
+- Future: Real OS display detection
+
+---
+
 ### Session 4: Basic Plugin System - 2024-12-19
 
 #### Added

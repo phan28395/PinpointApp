@@ -58,10 +58,10 @@ from core.events import EventBus
 **Goal**: Create the absolute minimum working foundation
 
 **Implementation Steps**:
-- ☐ Create `core/constants.py` - App constants (max 100 lines)
-- ☐ Create `core/exceptions.py` - Simple exceptions (max 100 lines)
-- ☐ Create `core/events.py` - Basic event bus (max 200 lines)
-- ☐ Create simple tests in `tests/test_session1_simple.py` (max 100 lines)
+- [x] Create `core/constants.py` - App constants (max 100 lines)
+- [x] Create `core/exceptions.py` - Simple exceptions (max 100 lines)
+- [x] Create `core/events.py` - Basic event bus (max 200 lines)
+- [x] Create simple tests in `tests/test_session1_simple.py` (max 100 lines)
 
 **Key Decisions**:
 - EventBus has NO logger dependency (just print for debugging)

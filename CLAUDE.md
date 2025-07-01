@@ -126,10 +126,10 @@ def test_event_bus_works():
 **Goal**: Minimal plugin system that works
 
 **Implementation Steps**:
-- ☐ Create `plugins/base.py` - Simple plugin interface (max 100 lines)
-- ☐ Create `plugins/loader.py` - Basic loading (max 200 lines)
-- ☐ Create one example plugin
-- ☐ Create `tests/test_session4_simple.py`
+- [x] Create `plugins/base.py` - Simple plugin interface (max 100 lines)
+- [x] Create `plugins/loader.py` - Basic loading (max 200 lines)
+- [x] Create one example plugin
+- [x] Create `tests/test_session4_simple.py`
 
 **Key Decisions**:
 - Plugins are just Python classes with a specific interface
@@ -142,10 +142,10 @@ def test_event_bus_works():
 **Goal**: Clean layout system using events
 
 **Implementation Steps**:
-- ☐ Create `core/layout_manager.py` - Layout logic (max 250 lines)
-- ☐ Create `core/display_manager.py` - Display abstraction (max 200 lines)
-- ☐ Migrate existing layout functionality
-- ☐ Create `tests/test_session5_simple.py`
+- [x] Create `core/layout_manager.py` - Layout logic (max 250 lines)
+- [x] Create `core/display_manager.py` - Display abstraction (max 200 lines)
+- [x] Migrate existing layout functionality
+- [x] Create `tests/test_session5_simple.py`
 
 ---
 

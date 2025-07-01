@@ -5,6 +5,8 @@ from .constants import *
 from .exceptions import *
 from .events import EventBus, EventError, get_event_bus, configure_event_bus
 from .logger import Logger, LogLevel, get_logger, configure_global_logger
+from .tile_manager import TileManager
+from .tile_registry import TileRegistry, TileTypeInfo, get_tile_registry
 
 __all__ = [
     # Constants
@@ -31,4 +33,7 @@ __all__ = [
     
     # Logger
     'Logger', 'LogLevel', 'get_logger', 'configure_global_logger',
+    
+    # Tile Management
+    'TileManager', 'TileRegistry', 'TileTypeInfo', 'get_tile_registry',
 ]

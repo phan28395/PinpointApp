@@ -93,11 +93,11 @@ def test_event_bus_works():
 **Goal**: Add logging and basic storage abstraction
 
 **Implementation Steps**:
-- ☐ Create `core/logger.py` - Simple JSON logger (max 150 lines)
-- ☐ Create `data/base_store.py` - Abstract storage interface (max 100 lines)
-- ☐ Create `data/json_store.py` - JSON implementation (max 150 lines)
-- ☐ Update EventBus to optionally use logger
-- ☐ Create `tests/test_session2_simple.py` (max 150 lines)
+- [x] Create `core/logger.py` - Simple JSON logger (max 150 lines)
+- [x] Create `data/base_store.py` - Abstract storage interface (max 100 lines)
+- [x] Create `data/json_store.py` - JSON implementation (max 150 lines)
+- [x] Update EventBus to optionally use logger
+- [x] Create `tests/test_session2_simple.py` (max 150 lines)
 
 **Key Decisions**:
 - Logger is independent (doesn't use EventBus)
@@ -110,10 +110,10 @@ def test_event_bus_works():
 **Goal**: Clean up tile manager using events and storage abstraction
 
 **Implementation Steps**:
-- ☐ Create `core/tile_manager.py` - Using events & storage (max 300 lines)
-- ☐ Create `core/tile_registry.py` - Track tile types (max 150 lines)
-- ☐ Migrate existing tile functionality
-- ☐ Create `tests/test_session3_simple.py`
+- [x] Create `core/tile_manager.py` - Using events & storage (max 300 lines)
+- [x] Create `core/tile_registry.py` - Track tile types (max 150 lines)
+- [x] Migrate existing tile functionality
+- [x] Create `tests/test_session3_simple.py`
 
 **Key Decisions**:
 - Tile manager uses events for all state changes

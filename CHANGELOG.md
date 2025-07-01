@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Session 4: Basic Plugin System - 2024-12-19
+
+#### Added
+- **Plugin Infrastructure**
+  - `plugins/base.py` - Plugin interface and metadata (92 lines)
+  - `plugins/loader.py` - Plugin discovery and loading (196 lines)
+  - `plugins/__init__.py` - Module exports (6 lines)
+  - `plugins/builtin/__init__.py` - Builtin plugins directory (2 lines)
+
+- **Example Plugin**
+  - `plugins/builtin/example_plugin.py` - Counter tile plugin (154 lines)
+  - Demonstrates full plugin lifecycle
+  - Config schema and validation
+  - Export/import functionality
+
+- **Testing**
+  - `tests/test_session4_simple.py` - Plugin system tests (203 lines)
+  - 11 tests covering all plugin functionality
+  - Tests discovery, loading, and lifecycle
+
+#### Features Implemented
+- **Plugin Discovery**: Automatic discovery from plugin directories
+- **Dynamic Loading**: Load plugins from Python files at runtime
+- **Tile Registration**: Plugins can register new tile types
+- **Configuration Schema**: JSON Schema support for tile configs
+- **Data Export/Import**: Plugins can serialize/deserialize tile data
+- **Lifecycle Management**: Initialize/shutdown hooks for plugins
+- **Plugin Metadata**: Structured information about each plugin
+
+#### Design Decisions
+- **Simple Interface**: Minimal abstract methods for easy implementation
+- **No Sandboxing**: Trust plugins (can add security later)
+- **File-Based**: Plugins are Python files (no packaging yet)
+- **Mock Widgets**: Return dictionaries instead of real UI widgets for testing
+- **Global Registry**: Plugins register tile types with existing registry
+
+#### Plugin Contract
+- Must inherit from `BasePlugin`
+- Must implement: `get_metadata()`, `initialize()`, `shutdown()`, `create_tile_widget()`
+- Optional: config schema, validation, export/import, custom editor
+- Metadata includes: id, name, version, author, tile types, dependencies
+
+#### Implementation Details
+- Uses `importlib` for dynamic loading
+- Plugins found by file pattern (*.py excluding _ and test files)
+- Each plugin can provide multiple tile types
+- Plugin IDs must be unique
+- Graceful error handling (one bad plugin doesn't break others)
+
+#### Known Limitations
+- No hot reloading (must restart to reload plugins)
+- No plugin dependencies resolution
+- No version compatibility checking
+- No plugin settings persistence
+- No resource isolation between plugins
+- Mock UI widgets (real implementation needs Qt integration)
+
+#### Metrics
+- Total new lines of code: 653
+- Test coverage: All public APIs tested
+- Example plugin demonstrates all features
+- Plugin interface methods: 9 (4 required, 5 optional)
+- File count: 6 files
+
+#### Next Steps
+- Session 5: Layout management
+- Session 6: Design system foundation
+- Future: Real Qt widget integration for plugins
+
+---
+
+### Session 3: Refactor Tile Manager - 2024-12-19
+
+#### Added
+- **Tile Management System**
+  - `core/tile_manager.py` - Event-driven tile manager (297 lines)
+  - Full CRUD operations for tiles
+  - Event emission for all state changes
+  - Storage abstraction usage
+  - Validation for tile data
+  - Caching for performance
+
+- **Tile Registry**
+  - `core/tile_registry.py` - Tile type registry (172 lines)
+  - Built-in tile types: note, clock, weather, todo
+  - Type metadata and capabilities tracking
+  - Category-based organization
+  - Default configuration management
+
+- **Testing**
+  - `tests/test_session3_simple.py` - Tile system tests (234 lines)
+  - 10 tests covering manager and registry
+  - Event emission verification
+  - Error handling tests
+
+#### Changed
+- **Core Module Updates**
+  - `core/__init__.py` - Added tile management exports
+
+#### Design Decisions
+- **Event-Driven Architecture**: All tile state changes emit events for decoupling
+- **Storage Abstraction**: Manager uses BaseStore interface, not tied to JSON
+- **Caching Strategy**: In-memory cache with dirty flag for performance
+- **Type Registry**: Centralized tile type information and validation
+- **Immediate Save**: Creates and deletes save immediately, updates are debounced
+
+#### Implementation Details
+- Tile IDs use UUID for uniqueness
+- Validation includes dimension constraints from constants
+- Registry pre-populates with built-in types
+- Events include full context (tile_id, updates, full data)
+- Manager handles its own logger instance
+
+#### Architecture Benefits
+- **Decoupled Components**: UI can listen to events without direct dependencies
+- **Extensible Types**: Easy to add new tile types via registry
+- **Testable Logic**: Business logic separated from UI concerns
+- **Consistent State**: Single source of truth with event notifications
+
+#### Known Limitations
+- No transaction support (operations not atomic)
+- No optimistic locking for concurrent edits
+- Cache not size-limited (could grow large)
+- No partial updates (always replace full tile)
+- No batch operations
+
+#### Metrics
+- Total new lines of code: 703
+- Test coverage: All public APIs tested
+- Event types: 5 (created, updated, deleted, moved, resized)
+- Built-in tile types: 4
+- File count: 4 files (3 new, 1 updated)
+
+#### Migration Notes
+- Existing tile data structure is preserved
+- New code can coexist with old tile_manager.py
+- Events enable gradual UI migration
+
+#### Next Steps
+- Session 4: Basic plugin system
+- Session 5: Layout management
+- Session 6: Design system foundation
+
+---
+
 ### Session 2: Add Logging & Storage Abstraction - 2024-12-19
 
 #### Added

@@ -1,469 +1,302 @@
 # CLAUDE.md - PinPoint Architecture Redesign Plan
 
 ## Overview
-PinPoint is a desktop application for creating floating widgets (tiles) that can be positioned anywhere on screen. The current implementation needs refactoring to separate tile logic from visual design, enabling third-party designers to create custom tile.
-This document outlines a step-by-step plan to redesign PinPoint's architecture from a showcase application to a production-ready, extensible platform. The focus is on building a solid foundation that can be extended without major rewrites.
+PinPoint is a desktop application for creating floating widgets (tiles) that can be positioned anywhere on screen. This document outlines a pragmatic, step-by-step plan to refactor PinPoint from a monolithic application to a modular, extensible platform.
 
-## Document Change Policy
-This file (CLAUDE.md) should remain stable throughout development. However, changes are permitted under these conditions:
-1. **Critical architectural discoveries** that make the current plan unworkable
-2. **Security vulnerabilities** discovered in the planned approach
-3. **Platform limitations** that require architectural adjustments
-4. **Performance bottlenecks** that necessitate design changes
+## 🎯 Core Principles (LEARNED FROM FIRST ATTEMPT)
 
-### How to Update This Document
-If changes are necessary:
-1. Document in CHANGELOG.md:
-   - The exact change needed
-   - Clear justification
-   - Impact on future sessions
-2. Update CLAUDE.md with:
-   - `[UPDATED: Session X - Date]` marker
-   - Brief reason in parentheses
-   - The specific changes
+### 1. Start Simple, Enhance Gradually
+- Each session builds ONE thing that works
+- No complex infrastructure until basics are solid
+- Test infrastructure comes AFTER core functionality
 
-## Project Structure Clarification
-The project root is the `pinpoint/` directory itself, not a parent directory containing pinpoint as a package.
-   
-## Architecture Goals
-1. **Modular Design**: No file exceeds 500 lines
-2. **Separation of Concerns**: Complete separation of logic and visual design
-3. **Plugin Architecture**: Safe, extensible plugin system
-4. **Performance**: Responsive with 50+ tiles
-5. **Cross-Platform**: Windows/Mac primary
-6. **Backward Compatibility**: Existing data and plugins continue to work
-7. **Extensibility**: New features without core changes
-8. **Debuggability**: Clear event flow with comprehensive logging
+### 2. Clear Dependencies
+```
+Layer 0: constants (no dependencies)
+Layer 1: exceptions (uses constants only)
+Layer 2: events (uses exceptions only)
+Layer 3: logger (uses events only)
+Layer 4: everything else
+```
 
-## Session Plan
+### 3. Import Structure (CRITICAL - READ THIS FIRST)
+```
+PROJECT ROOT: pinpoint/
+WORKING DIRECTORY: Always run from pinpoint/
 
-### Session 1: Core Foundation & Event System
-**Goal**: Strip down to minimal core with robust event system
+IMPORTS WITHIN PROJECT:
+from core.events import EventBus     # ✓ CORRECT
+from storage import StorageManager    # ✓ CORRECT
+from pinpoint.core.events import ...  # ✗ WRONG
+
+IMPORTS IN TESTS:
+# Add at top of every test file:
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Then import normally:
+from core.events import EventBus
+```
+
+### 4. Testing Philosophy
+- Start with 3-5 SIMPLE tests per component
+- No test reports/infrastructure until Session 8
+- Use plain `assert` statements first
+- Complex test features are a luxury, not a necessity
+
+## 📋 Architecture Goals (Simplified)
+1. **Modular Design**: Reasonable file sizes (300-500 lines)
+2. **Clear Dependencies**: No circular imports
+3. **Plugin Ready**: Extensible but start simple
+4. **Stable Core**: Don't break existing functionality
+5. **Testable**: But don't over-engineer tests
+
+## 🚀 Session Plan (Revised for Clarity)
+
+### Session 1: Minimal Core Foundation
+**Goal**: Create the absolute minimum working foundation
 
 **Implementation Steps**:
-- ☐ Create `core/events.py` - Central event bus (max 200 lines)
-- ☐ Create `core/logger.py` - Structured logging system (max 150 lines)
-- ☐ Create `core/exceptions.py` - Custom exceptions with error codes (max 100 lines)
-- ☐ Refactor `tile_manager.py` → `core/tile_manager.py` (max 300 lines)
-- ☐ Create `core/constants.py` - All app constants (max 100 lines)
+- ☐ Create `core/constants.py` - App constants (max 100 lines)
+- ☐ Create `core/exceptions.py` - Simple exceptions (max 100 lines)
+- ☐ Create `core/events.py` - Basic event bus (max 200 lines)
+- ☐ Create simple tests in `tests/test_session1_simple.py` (max 100 lines)
+
+**Key Decisions**:
+- EventBus has NO logger dependency (just print for debugging)
+- Exceptions are simple classes, no fancy serialization yet
+- Constants are just variables, no validation
 
 **Test Requirements**:
-- Event bus message passing
-- Logger output verification
-- Exception handling
-- Basic tile manager operations
+```python
+def test_event_bus_works():
+    bus = EventBus()
+    received = []
+    bus.subscribe("test", lambda e: received.append(e))
+    bus.emit("test", {})
+    assert len(received) == 1
+
+# That's it! 5-10 simple tests like this
+```
 
 **Deliverables**:
 - Working event system
-- Centralized logging
-- Clean tile manager
-- Test file: `tests/test_session1.py`
-- Git commit: `refactor: establish core foundation with event system and logging`
+- Basic exceptions
+- Simple constants
+- 5-10 passing tests
+- NO test reports, NO complex infrastructure
 
 ---
 
-### Session 2: Basic Plugin System
-**Goal**: Implement simple, extensible plugin system
+### Session 2: Add Logging & Storage Abstraction
+**Goal**: Add logging and basic storage abstraction
 
 **Implementation Steps**:
-- ☐ Create `plugins/base_plugin.py` - Abstract plugin interface (max 150 lines)
-- ☐ Create `plugins/plugin_loader.py` - Safe dynamic loading (max 250 lines)
-- ☐ Create `plugins/plugin_manifest.py` - Plugin metadata spec (max 100 lines)
-- ☐ Create `plugins/plugin_api.py` - Limited API for plugins (max 200 lines)
-- ☐ Update existing plugins to use new system
+- ☐ Create `core/logger.py` - Simple JSON logger (max 150 lines)
+- ☐ Create `data/base_store.py` - Abstract storage interface (max 100 lines)
+- ☐ Create `data/json_store.py` - JSON implementation (max 150 lines)
+- ☐ Update EventBus to optionally use logger
+- ☐ Create `tests/test_session2_simple.py` (max 150 lines)
 
-**Test Requirements**:
-- Plugin loading/unloading
-- Basic permission checking
-- API access control
-- Plugin manifest validation
-
-**Deliverables**:
-- Working plugin system
-- Plugin API documentation
-- Example plugin using new system
-- Test file: `tests/test_session2.py`
-- Git commit: `feat: implement basic plugin architecture`
+**Key Decisions**:
+- Logger is independent (doesn't use EventBus)
+- Storage abstraction is minimal (just load/save)
+- Still no complex test infrastructure
 
 ---
 
-### Session 3: Data Layer Separation
-**Goal**: Abstract all data operations for future flexibility
+### Session 3: Refactor Tile Manager
+**Goal**: Clean up tile manager using events and storage abstraction
 
 **Implementation Steps**:
-- ☐ Create `data/base_store.py` - Abstract data interface (max 100 lines)
-- ☐ Create `data/tile_store.py` - Tile data operations (max 200 lines)
-- ☐ Create `data/layout_store.py` - Layout data operations (max 200 lines)
-- ☐ Create `data/settings_store.py` - Settings management (max 150 lines)
-- ☐ Create `data/migrations.py` - Data migration system (max 200 lines)
+- ☐ Create `core/tile_manager.py` - Using events & storage (max 300 lines)
+- ☐ Create `core/tile_registry.py` - Track tile types (max 150 lines)
+- ☐ Migrate existing tile functionality
+- ☐ Create `tests/test_session3_simple.py`
 
-**Test Requirements**:
-- CRUD operations
-- Data migration from current format
-- Concurrent access handling
-- Data validation
-
-**Deliverables**:
-- Abstracted data layer
-- Working migrations
-- No direct file access in other modules
-- Test file: `tests/test_session3.py`
-- Git commit: `refactor: separate data layer with migration support`
+**Key Decisions**:
+- Tile manager uses events for all state changes
+- No UI dependencies in core
+- Keep existing tile functionality working
 
 ---
 
-### Session 4: Visual Design Separation
-**Goal**: Complete separation of visual design from logic
+### Session 4: Basic Plugin System
+**Goal**: Minimal plugin system that works
 
 **Implementation Steps**:
-- ☐ Create `design/theme_engine.py` - Theme processing (max 250 lines)
-- ☐ Create `design/component_registry.py` - UI component catalog (max 200 lines)
-- ☐ Create `design/style_validator.py` - Design validation (max 150 lines)
-- ☐ Create `design/design_tokens.py` - Design constraints (max 100 lines)
-- ☐ Refactor existing tiles to use component registry
+- ☐ Create `plugins/base.py` - Simple plugin interface (max 100 lines)
+- ☐ Create `plugins/loader.py` - Basic loading (max 200 lines)
+- ☐ Create one example plugin
+- ☐ Create `tests/test_session4_simple.py`
 
-**Test Requirements**:
-- Theme application
-- Component registration
-- Style validation
-- Design token enforcement
-
-**Deliverables**:
-- Working theme system
-- Component registry with base components
-- Design token system
-- Test file: `tests/test_session4.py`
-- Git commit: `feat: implement visual design separation`
+**Key Decisions**:
+- Plugins are just Python classes with a specific interface
+- No sandboxing yet (trust plugins)
+- No hot reloading (restart required)
 
 ---
 
-### Session 5: Error Handling & Recovery
-**Goal**: Robust error boundaries and recovery mechanisms
+### Session 5: Layout Management
+**Goal**: Clean layout system using events
 
 **Implementation Steps**:
-- ☐ Create `core/error_boundary.py` - Error isolation (max 200 lines)
-- ☐ Create `core/tile_supervisor.py` - Tile health monitoring (max 250 lines)
-- ☐ Create `core/recovery.py` - Auto-recovery mechanisms (max 150 lines)
-- ☐ Update tile lifecycle for error handling
-- ☐ Add health checks to tile manager
-
-**Test Requirements**:
-- Error isolation between tiles
-- Automatic recovery
-- Health monitoring
-- Graceful degradation
-
-**Deliverables**:
-- Error boundary system
-- Tile supervision
-- Recovery mechanisms
-- Test file: `tests/test_session5.py`
-- Git commit: `feat: implement error handling and recovery`
+- ☐ Create `core/layout_manager.py` - Layout logic (max 250 lines)
+- ☐ Create `core/display_manager.py` - Display abstraction (max 200 lines)
+- ☐ Migrate existing layout functionality
+- ☐ Create `tests/test_session5_simple.py`
 
 ---
 
-### Session 6: Performance Foundation
-**Goal**: Basic performance monitoring and optimization
+### Session 6: Design System Foundation
+**Goal**: Separate visual design from logic
 
 **Implementation Steps**:
-- ☐ Create `performance/monitor.py` - Performance metrics (max 200 lines)
-- ☐ Create `performance/lazy_loader.py` - Lazy loading system (max 150 lines)
-- ☐ Create `performance/throttle.py` - Update throttling (max 150 lines)
-- ☐ Add performance hooks to tile lifecycle
-- ☐ Implement basic lazy loading
-
-**Test Requirements**:
-- Performance metric collection
-- Lazy loading functionality
-- Update throttling
-- Memory usage tracking
-
-**Deliverables**:
-- Performance monitoring
-- Basic optimizations
-- Performance dashboard data
-- Test file: `tests/test_session6.py`
-- Git commit: `perf: add performance monitoring and basic optimizations`
+- ☐ Create `design/theme.py` - Basic theming (max 150 lines)
+- ☐ Create `design/components.py` - UI component registry (max 200 lines)
+- ☐ Update one tile type to use themes
+- ☐ Create `tests/test_session6_simple.py`
 
 ---
 
-### Session 7: Plugin Templates
-**Goal**: Make plugin development accessible
+### Session 7: Error Handling
+**Goal**: Proper error boundaries and recovery
 
 **Implementation Steps**:
-- ☐ Create `tools/plugin_templates.py` - Plugin boilerplates (max 200 lines)
-- ☐ Create `tools/template_generator.py` - Template engine (max 150 lines)
-- ☐ Create templates for common plugin types
-- ☐ Create `docs/plugin_development.md` - Developer guide
-- ☐ Create example plugins from templates
-
-**Test Requirements**:
-- Template generation
-- Template validation
-- Generated plugin functionality
-- Documentation completeness
-
-**Deliverables**:
-- Plugin templates
-- Template generator
-- Developer documentation
-- Example plugins
-- Test file: `tests/test_session7.py`
-- Git commit: `feat: add plugin development templates`
+- ☐ Create `core/error_boundary.py` - Catch tile errors (max 150 lines)
+- ☐ Update tile manager with error handling
+- ☐ Add recovery mechanisms
+- ☐ Create `tests/test_session7_simple.py`
 
 ---
 
-### Session 8: Platform Compatibility
-**Goal**: Basic cross-platform support
+### Session 8: Test Infrastructure (FINALLY!)
+**Goal**: NOW we add proper test infrastructure
 
 **Implementation Steps**:
-- ☐ Create `platform/platform_utils.py` - Platform detection (max 150 lines)
-- ☐ Create `platform/path_utils.py` - Path handling (max 100 lines)
-- ☐ Create `platform/system_tray.py` - Tray abstraction (max 200 lines)
-- ☐ Update file operations for cross-platform
-- ☐ Test on Windows and Mac
-
-**Test Requirements**:
-- Platform detection
-- Path handling across OS
-- System tray functionality
-- File operations
-
-**Deliverables**:
-- Cross-platform utilities
-- Working on Windows/Mac
-- Platform-specific documentation
-- Test file: `tests/test_session8.py`
-- Git commit: `feat: add cross-platform compatibility`
+- ☐ Create `tests/base_test.py` - Test base class with reporting
+- ☐ Create `tests/runner.py` - Test runner with reports
+- ☐ Update all existing tests to use new infrastructure
+- ☐ Generate first comprehensive test report
 
 ---
 
-### Session 9: Backward Compatibility
-**Goal**: Ensure smooth migration from current version
+### Session 9: Platform Support
+**Goal**: Basic cross-platform compatibility
 
 **Implementation Steps**:
-- ☐ Create `compat/legacy_data.py` - Old format readers (max 200 lines)
-- ☐ Create `compat/migration_engine.py` - Auto-migration (max 250 lines)
-- ☐ Create `compat/plugin_adapter.py` - Legacy plugin support (max 150 lines)
-- ☐ Add compatibility tests with real user data
-- ☐ Create migration guide
-
-**Test Requirements**:
-- Load old data formats
-- Plugin compatibility
-- Data integrity after migration
-- No data loss
-
-**Deliverables**:
-- Working migration system
-- Legacy support
-- Migration documentation
-- Test file: `tests/test_session9.py`
-- Git commit: `feat: add backward compatibility layer`
+- ☐ Create `platform/base.py` - Platform abstraction
+- ☐ Create `platform/windows.py` - Windows specifics
+- ☐ Create `platform/mac.py` - Mac specifics
+- ☐ Update system tray and file paths
 
 ---
 
 ### Session 10: Integration & Polish
-**Goal**: Integrate all components into cohesive system
+**Goal**: Tie everything together
 
 **Implementation Steps**:
-- ☐ Create `app/application.py` - Main app orchestration (max 300 lines)
-- ☐ Create `app/config.py` - Configuration management (max 150 lines)
-- ☐ Update `main.py` to use new architecture (max 50 lines)
-- ☐ Update UI components to use new systems
-- ☐ Create integration tests
-
-**Test Requirements**:
-- End-to-end workflows
-- All systems integration
-- Performance benchmarks
-- User acceptance scenarios
-
-**Deliverables**:
-- Fully integrated application
-- Configuration system
-- Complete test suite
-- Test file: `tests/test_integration.py`
-- Git commit: `feat: complete architecture redesign integration`
+- ☐ Create `app/application.py` - Main app using all systems
+- ☐ Update `main.py` to use new architecture
+- ☐ Comprehensive integration tests
+- ☐ Performance benchmarks
+- ☐ Migration guide for users
 
 ---
 
-## File Structure After Redesign
+## 📁 File Structure (Simplified)
 ```
-pinpoint/
-├── core/
+pinpoint/                    # PROJECT ROOT - Always work from here
+├── core/                    # Core systems (Sessions 1-3)
 │   ├── __init__.py
-│   ├── events.py
-│   ├── logger.py
-│   ├── exceptions.py
-│   ├── tile_manager.py
-│   ├── constants.py
-│   ├── error_boundary.py
-│   ├── tile_supervisor.py
-│   └── recovery.py
-├── plugins/
-│   ├── __init__.py
-│   ├── base_plugin.py
-│   ├── plugin_loader.py
-│   ├── plugin_manifest.py
-│   └── plugin_api.py
-├── data/
+│   ├── constants.py         # Layer 0: No dependencies
+│   ├── exceptions.py        # Layer 1: Uses constants
+│   ├── events.py           # Layer 2: Uses exceptions
+│   ├── logger.py           # Layer 3: Independent
+│   ├── tile_manager.py     # Layer 4: Uses all above
+│   └── layout_manager.py   # Layer 4: Uses all above
+├── data/                   # Data layer (Session 2)
 │   ├── __init__.py
 │   ├── base_store.py
-│   ├── tile_store.py
-│   ├── layout_store.py
-│   ├── settings_store.py
-│   └── migrations.py
-├── design/
+│   └── json_store.py
+├── plugins/                # Plugin system (Session 4)
 │   ├── __init__.py
-│   ├── theme_engine.py
-│   ├── component_registry.py
-│   ├── style_validator.py
-│   └── design_tokens.py
-├── performance/
+│   ├── base.py
+│   └── loader.py
+├── design/                 # Design system (Session 6)
 │   ├── __init__.py
-│   ├── monitor.py
-│   ├── lazy_loader.py
-│   └── throttle.py
-├── tools/
+│   ├── theme.py
+│   └── components.py
+├── platform/               # Platform support (Session 9)
 │   ├── __init__.py
-│   ├── plugin_templates.py
-│   └── template_generator.py
-├── platform/
+│   ├── base.py
+│   ├── windows.py
+│   └── mac.py
+├── tests/                  # Tests (start simple!)
 │   ├── __init__.py
-│   ├── platform_utils.py
-│   ├── path_utils.py
-│   └── system_tray.py
-├── compat/
-│   ├── __init__.py
-│   ├── legacy_data.py
-│   ├── migration_engine.py
-│   └── plugin_adapter.py
-├── app/
-│   ├── __init__.py
-│   ├── application.py
-│   └── config.py
-├── tests/
-│   └── (test files for each session)
+│   ├── test_session1_simple.py   # 5-10 basic tests
+│   ├── test_session2_simple.py   # etc...
+│   └── base_test.py              # Added in Session 8 only!
+├── existing_files...       # All current PinPoint files
 └── main.py
 ```
 
-## Success Metrics
-- No file exceeds 500 lines
-- Clean separation of concerns
-- All existing functionality preserved
-- Plugin development time < 30 minutes
-- Zero crashes from plugin failures
-- Smooth migration from current version
-## Test Output Requirements
-Each session's test file must generate a test report in the test_reports/ directory:
+## ✅ Success Metrics (Realistic)
+- Each session's code works and passes tests
+- No circular dependencies
+- Existing functionality still works
+- Can add new tile types easily (by Session 6)
+- Tests are maintainable and fast
 
-### Test Report Format: test_reports/session_X_report_YYYYMMDD_HHMMSS.txt
-Required Report Contents:
-=== PinPoint Architecture Test Report ===
-Session: X - [Session Name]
-Date: YYYY-MM-DD HH:MM:SS
-Platform: [Windows/Mac/Linux] [Version]
-Python: [Version]
+## 🛠️ Development Guidelines
 
-=== Test Summary ===
-Total Tests: X
-Passed: X
-Failed: X
-Skipped: X
-Duration: X.XX seconds
+### Before Each Session:
+1. Read the session goals (keep them modest)
+2. Check that previous session's code works
+3. Don't add "nice to have" features
 
-=== Detailed Results ===
-[Test name] ... PASSED (X.XXs)
-[Test name] ... FAILED (X.XXs)
-  Error: [Error details]
-  File: [File path], Line: [Line number]
+### During Each Session:
+1. Write the simplest code that works
+2. Test as you go with simple tests
+3. Don't optimize prematurely
+4. If it's getting complex, stop and simplify
 
-=== System Health Check ===
-- Core modules loaded: [OK/FAIL]
-- Event system responding: [OK/FAIL]
-- Data layer accessible: [OK/FAIL]
-- Plugin system initialized: [OK/FAIL]
-- No circular dependencies: [OK/FAIL]
+### After Each Session:
+1. Run the simple tests
+2. Verify existing functionality works
+3. Commit working code
+4. Don't add complex infrastructure
 
-=== Performance Metrics ===
-- Import time: X.XX seconds
-- Memory usage: X.X MB
-- Test execution time: X.XX seconds
+## 🚨 Common Pitfalls to Avoid
 
-=== Integration Status ===
-- Previous session tests still passing: [YES/NO]
-- Backward compatibility maintained: [YES/NO]
-- No regression detected: [YES/NO]
+1. **Over-engineering Early**: Don't add logging to EventBus in Session 1
+2. **Complex Test Infrastructure**: Simple asserts until Session 8
+3. **Circular Dependencies**: Check dependency layers
+4. **Import Confusion**: Always work from pinpoint/ directory
+5. **Feature Creep**: Stick to session goals
 
-=== Notes ===
-[Any additional notes or warnings]
-### Test Report Implementation:
-Each test file should include this base test class:
-import unittest
-import time
-import platform
-import sys
-import traceback
-from datetime import datetime
-from pathlib import Path
+## 📝 Document Change Policy
+Changes to this document require:
+1. Clear justification in CHANGELOG.md
+2. Approval based on actual implementation experience
+3. Updates marked with [UPDATED: Session X - Date]
 
-class BaseTestCase(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.report_path = Path("test_reports")
-        cls.report_path.mkdir(exist_ok=True)
-        cls.session_num = cls.__module__.split('_')[2]  # Extract from test_sessionX
-        cls.results = []
-        cls.start_time = time.time()
-        
-    def run(self, result=None):
-        test_result = super().run(result)
-        # Capture test results for report
-        return test_result
-        
-    @classmethod
-    def tearDownClass(cls):
-        # Generate report
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        report_file = cls.report_path / f"session_{cls.session_num}_report_{timestamp}.txt"
-        # Write report with format above
+## 🎓 Lessons from Session 1
 
-    
-## Session Guidelines
+### What Went Wrong:
+- Too much complexity in first session
+- Test infrastructure before core was stable  
+- Unclear import structure
+- Circular dependency (EventBus → Logger)
+- Weak reference tests with bound methods
 
-**Before Each Session**:
-- Review the session goals
-- Ensure previous session's tests pass
-- Create feature branch if needed
+### What We Learned:
+- Start simpler than you think necessary
+- Test infrastructure is not core functionality
+- Clear import docs save hours of debugging
+- Python quirks matter (weak refs + methods)
+- Perfect is the enemy of good
 
-**During Each Session**:
-- Follow line count limits flexibly (if it is challenging to limit under 500 lines count then it is totally fine to exceed the limit)
-- Write tests alongside implementation
-- Document design decisions in code
-- Keep user functionality working
-
-**After Each Session**:
-- Run all tests (current and previous), each need to have the mechanism to ouput log in txt file
-- Test overall strategy should be simple "smoke test" that ensures nothing breaks as you progress
-- Update CHANGELOG.md with:
-  - Completed tasks
-  - Any deviations and reasons
-  - Known issues
-  - Next session prep notes
-  - Test report summary
-- Commit with specified message
-- Merge to main branch if stable
-
-## Future Extension Points
-This foundation specifically enables these future additions without major changes:
-- **AI Plugin Generation**: Add AI templates to template system
-- **Visual Plugin Builder**: New tool using plugin templates
-- **Process Isolation**: Upgrade error boundaries to full isolation
-- **Advanced Performance**: Extend monitoring with optimization
-- **Linux Support**: Add to platform utils
-- **Plugin Marketplace**: Add to plugin manifest and API
-- **Design Marketplace**: Extend theme engine
-- **Real-time Collaboration**: Hook into event system
-
-The architecture is intentionally kept simple to allow these extensions through addition, not modification.
+### Key Insight:
+**Build something that works, then make it better. Don't try to build the perfect system from day one.**

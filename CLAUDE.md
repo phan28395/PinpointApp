@@ -22,6 +22,9 @@ If changes are necessary:
    - Brief reason in parentheses
    - The specific changes
 
+## Project Structure Clarification
+The project root is the `pinpoint/` directory itself, not a parent directory containing pinpoint as a package.
+   
 ## Architecture Goals
 1. **Modular Design**: No file exceeds 500 lines
 2. **Separation of Concerns**: Complete separation of logic and visual design
@@ -352,7 +355,81 @@ pinpoint/
 - Plugin development time < 30 minutes
 - Zero crashes from plugin failures
 - Smooth migration from current version
+## Test Output Requirements
+Each session's test file must generate a test report in the test_reports/ directory:
 
+### Test Report Format: test_reports/session_X_report_YYYYMMDD_HHMMSS.txt
+Required Report Contents:
+=== PinPoint Architecture Test Report ===
+Session: X - [Session Name]
+Date: YYYY-MM-DD HH:MM:SS
+Platform: [Windows/Mac/Linux] [Version]
+Python: [Version]
+
+=== Test Summary ===
+Total Tests: X
+Passed: X
+Failed: X
+Skipped: X
+Duration: X.XX seconds
+
+=== Detailed Results ===
+[Test name] ... PASSED (X.XXs)
+[Test name] ... FAILED (X.XXs)
+  Error: [Error details]
+  File: [File path], Line: [Line number]
+
+=== System Health Check ===
+- Core modules loaded: [OK/FAIL]
+- Event system responding: [OK/FAIL]
+- Data layer accessible: [OK/FAIL]
+- Plugin system initialized: [OK/FAIL]
+- No circular dependencies: [OK/FAIL]
+
+=== Performance Metrics ===
+- Import time: X.XX seconds
+- Memory usage: X.X MB
+- Test execution time: X.XX seconds
+
+=== Integration Status ===
+- Previous session tests still passing: [YES/NO]
+- Backward compatibility maintained: [YES/NO]
+- No regression detected: [YES/NO]
+
+=== Notes ===
+[Any additional notes or warnings]
+### Test Report Implementation:
+Each test file should include this base test class:
+import unittest
+import time
+import platform
+import sys
+import traceback
+from datetime import datetime
+from pathlib import Path
+
+class BaseTestCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.report_path = Path("test_reports")
+        cls.report_path.mkdir(exist_ok=True)
+        cls.session_num = cls.__module__.split('_')[2]  # Extract from test_sessionX
+        cls.results = []
+        cls.start_time = time.time()
+        
+    def run(self, result=None):
+        test_result = super().run(result)
+        # Capture test results for report
+        return test_result
+        
+    @classmethod
+    def tearDownClass(cls):
+        # Generate report
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_file = cls.report_path / f"session_{cls.session_num}_report_{timestamp}.txt"
+        # Write report with format above
+
+    
 ## Session Guidelines
 
 **Before Each Session**:
@@ -367,13 +444,14 @@ pinpoint/
 - Keep user functionality working
 
 **After Each Session**:
-- Run all tests (current and previous)
+- Run all tests (current and previous), each need to have the mechanism to ouput log in txt file
 - Test overall strategy should be simple "smoke test" that ensures nothing breaks as you progress
 - Update CHANGELOG.md with:
   - Completed tasks
   - Any deviations and reasons
   - Known issues
   - Next session prep notes
+  - Test report summary
 - Commit with specified message
 - Merge to main branch if stable
 

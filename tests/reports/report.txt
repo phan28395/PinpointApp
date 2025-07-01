@@ -1,0 +1,68 @@
+================================================================================
+PINPOINT TEST REPORT
+================================================================================
+Generated: 2025-07-01 20:40:18
+
+SUMMARY
+----------------------------------------
+Total Test Suites: 5
+Total Tests: 20
+Passed: 20
+Failed: 0
+Pass Rate: 100.0%
+Total Duration: 0.15s
+
+================================================================================
+Suite: TestAnotherDemo
+----------------------------------------
+Tests: 2 | Passed: 2 | Failed: 0
+Pass Rate: 100.0% | Duration: 0.00s
+
+  ✓ test_quick_test (0.000s)
+  ✓ test_string_operations (0.000s)
+
+================================================================================
+Suite: TestInfrastructureDemo
+----------------------------------------
+Tests: 5 | Passed: 5 | Failed: 0
+Pass Rate: 100.0% | Duration: 0.10s
+
+  ✓ test_custom_messages (0.000s)
+  ✓ test_deliberate_failure (0.000s)
+  ✓ test_exception_handling (0.000s)
+  ✓ test_passing_example (0.000s)
+  ✓ test_with_timing (0.101s)
+
+================================================================================
+Suite: TestSession2Logger
+----------------------------------------
+Tests: 4 | Passed: 4 | Failed: 0
+Pass Rate: 100.0% | Duration: 0.01s
+
+  ✓ test_global_logger (0.000s)
+  ✓ test_logger_basic (0.015s)
+  ✓ test_logger_levels (0.000s)
+  ✓ test_logger_with_data (0.000s)
+
+================================================================================
+Suite: TestSession2Storage
+----------------------------------------
+Tests: 5 | Passed: 5 | Failed: 0
+Pass Rate: 100.0% | Duration: 0.03s
+
+  ✓ test_event_bus_with_logger (0.000s)
+  ✓ test_json_store_backup (0.018s)
+  ✓ test_json_store_basic (0.002s)
+  ✓ test_json_store_error_handling (0.004s)
+  ✓ test_json_store_methods (0.008s)
+
+================================================================================
+Suite: TestSimpleVerification
+----------------------------------------
+Tests: 4 | Passed: 4 | Failed: 0
+Pass Rate: 100.0% | Duration: 0.00s
+
+  ✓ test_assertions (0.000s)
+  ✓ test_basic_math (0.000s)
+  ✓ test_list_operations (0.000s)
+  ✓ test_string_operations (0.000s)

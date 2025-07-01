@@ -1,0 +1,27 @@
+PinPoint Test Report
+============================================================
+
+Suite: TestAnotherDemo
+  Tests: 2
+  Passed: 2
+  Failed: 0
+  Duration: 0.00s
+
+Suite: TestInfrastructureDemo
+  Tests: 5
+  Passed: 5
+  Failed: 0
+  Duration: 0.10s
+
+Suite: TestSession2Logger
+  Tests: 4
+  Passed: 4
+  Failed: 0
+  Duration: 0.02s
+
+Suite: TestSession2Storage
+  Tests: 5
+  Passed: 5
+  Failed: 0
+  Duration: 0.02s
+

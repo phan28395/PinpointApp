@@ -6,10 +6,12 @@ Discovers and runs all tests with reporting.
 
 import sys
 import importlib
+import importlib.util
 import inspect
 from pathlib import Path
 from typing import List, Optional, Type
 import argparse
+from datetime import datetime
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -50,15 +52,18 @@ class TestRunner:
         self.logger.info(f"Found {len(test_files)} test files")
         
         for test_file in sorted(test_files):
-            # Skip runner itself
-            if test_file.name == "runner.py":
+            # Skip runner itself and __pycache__
+            if test_file.name == "runner.py" or "__pycache__" in str(test_file):
                 continue
+                
+            self.logger.debug(f"Loading test file: {test_file}")
                 
             try:
                 # Import module
-                module_name = test_file.stem
+                module_name = f"test_module_{test_file.stem}"
                 spec = importlib.util.spec_from_file_location(module_name, test_file)
                 if not spec or not spec.loader:
+                    self.logger.warning(f"Could not create spec for {test_file}")
                     continue
                     
                 module = importlib.util.module_from_spec(spec)
@@ -69,13 +74,17 @@ class TestRunner:
                 for name, obj in inspect.getmembers(module):
                     if (inspect.isclass(obj) and 
                         issubclass(obj, BaseTest) and 
-                        obj is not BaseTest):
+                        obj is not BaseTest and
+                        obj.__module__ == module_name):  # Only from this module
                         test_classes.append(obj)
-                        self.logger.debug(f"Found test class: {obj.__name__}")
+                        self.logger.debug(f"Found test class: {obj.__name__} in {test_file.name}")
                         
             except Exception as e:
-                self.logger.error(f"Failed to load {test_file}: {e}")
+                self.logger.error(f"Failed to load {test_file}: {type(e).__name__}: {e}")
+                import traceback
+                self.logger.debug(traceback.format_exc())
                 
+        self.logger.info(f"Discovered {len(test_classes)} test classes")
         return test_classes
         
     def run_suite(self, test_class: Type[BaseTest]) -> TestSuiteResult:
@@ -98,7 +107,10 @@ class TestRunner:
             
         except Exception as e:
             self.logger.error(f"Failed to run suite {test_class.__name__}: {e}")
-            # Return empty result
+            import traceback
+            self.logger.debug(traceback.format_exc())
+            
+            # Return empty result with error
             result = TestSuiteResult(
                 name=test_class.__name__,
                 start_time=datetime.now()

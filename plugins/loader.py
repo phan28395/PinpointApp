@@ -156,6 +156,11 @@ class PluginLoader:
     def _register_plugin_tiles(self, plugin: BasePlugin, metadata: PluginMetadata) -> None:
         """Register tile types provided by a plugin."""
         for tile_type in metadata.tile_types:
+            # Check if already registered
+            if self.registry.is_valid_type(tile_type):
+                self.logger.warning(f"Tile type '{tile_type}' already registered, skipping")
+                continue
+                
             # Get default config from plugin
             schema = plugin.get_tile_config_schema(tile_type)
             default_config = {}
@@ -165,16 +170,19 @@ class PluginLoader:
                         default_config[prop] = spec["default"]
                         
             # Register with tile registry
-            self.registry.register_type(TileTypeInfo(
-                tile_type=tile_type,
-                name=f"{metadata.name} - {tile_type}",
-                description=f"Provided by {metadata.name}",
-                icon="🔌",  # Default plugin icon
-                category="Plugins",
-                default_config=default_config,
-                capabilities=[]
-            ))
-            
+            try:
+                self.registry.register_type(TileTypeInfo(
+                    tile_type=tile_type,
+                    name=f"{metadata.name} - {tile_type}",
+                    description=f"Provided by {metadata.name}",
+                    icon="🔌",  # Default plugin icon
+                    category="Plugins",
+                    default_config=default_config,
+                    capabilities=[]
+                ))
+            except PluginError as e:
+                self.logger.warning(f"Failed to register tile type '{tile_type}': {e}")
+
     def load_all_plugins(self) -> int:
         """
         Load all discovered plugins.

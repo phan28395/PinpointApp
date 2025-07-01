@@ -167,7 +167,7 @@ def run_gui(app, args):
     if args.theme:
         from design.theme import get_theme_manager
         theme_manager = get_theme_manager()
-        theme_manager.set_current_theme(args.theme)
+        theme_manager.set_theme(args.theme)
         
     # Handle import/export before starting GUI
     if args.export:

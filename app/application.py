@@ -11,11 +11,10 @@ import json
 # Core systems
 from core.events import get_event_bus
 from core.logger import get_logger, configure_global_logger
-from core.tile_manager import TileManager
-from core.tile_registry import get_tile_registry
+from core.tile_manager import get_tile_manager
 from core.layout_manager import LayoutManager
 from core.display_manager import get_display_manager
-from core.error_boundary import ErrorBoundary, get_error_boundary, RecoveryStrategy
+from core.error_boundary import ErrorBoundary, get_error_boundary
 
 # Data layer
 from data.json_store import JSONStore
@@ -66,16 +65,17 @@ class PinPointApplication:
         self.config_store = JSONStore(self.config_path / "config.json")
         
         # Initialize managers
-        self.tile_manager = TileManager(self.tile_store)
-        self.tile_registry = get_tile_registry()
+        self.tile_manager = get_tile_manager()
         self.layout_manager = LayoutManager(self.layout_store)
         self.display_manager = get_display_manager()
         self.theme_manager = get_theme_manager()
         self.component_registry = get_component_registry()
         
         # Plugin loader
-        plugin_dirs = [self.config_path / "plugins"]
-        self.plugin_loader = PluginLoader(plugin_dirs)
+        self.plugin_loader = PluginLoader(
+            self.config_path / "plugins",
+            self.config_store
+        )
         
         # State
         self.current_layout_id = None
@@ -91,6 +91,7 @@ class PinPointApplication:
         """Configure application logging."""
         log_file = self.log_path / "pinpoint.log"
         configure_global_logger(
+            name="pinpoint",
             log_file=log_file,
             console=True
         )
@@ -129,6 +130,9 @@ class PinPointApplication:
         try:
             # Load configuration
             self._load_configuration()
+            
+            # Initialize tile manager storage
+            self.tile_manager.set_storage(self.tile_store)
             
             # Load plugins
             self.plugin_loader.load_all_plugins()
@@ -177,7 +181,7 @@ class PinPointApplication:
                 
         # Apply theme
         theme_name = self.config_store.get("theme", "dark")
-        self.theme_manager.set_current_theme(theme_name)
+        self.theme_manager.set_theme(theme_name)
         
     def switch_layout(self, layout_id: str):
         """
@@ -186,11 +190,7 @@ class PinPointApplication:
         Args:
             layout_id: ID of layout to switch to
         """
-        with self.error_boundary.error_context(
-            component_type="layout",
-            operation="switch",
-            recovery=RecoveryStrategy.IGNORE
-        ):
+        with self.error_boundary.protect("layout_switch"):
             layout = self.layout_manager.get_layout(layout_id)
             if not layout:
                 raise ValueError(f"Layout {layout_id} not found")
@@ -221,17 +221,11 @@ class PinPointApplication:
             
             # Add to current layout
             if self.current_layout_id and tile:
-                # Create position and size dicts from config
-                position = config.get("position", {"x": 100, "y": 100})
-                size = config.get("size", {"width": 250, "height": 150})
-                
-                self.layout_manager.add_tile_to_layout(
+                self.layout_manager.add_tile_instance(
                     self.current_layout_id,
                     tile["id"],
-                    x=position.get("x", 100),
-                    y=position.get("y", 100),
-                    width=size.get("width", 250),
-                    height=size.get("height", 150)
+                    position=config.get("position", {"x": 100, "y": 100}),
+                    size=config.get("size", {"width": 250, "height": 150})
                 )
                 
             return tile["id"] if tile else None
@@ -245,22 +239,10 @@ class PinPointApplication:
             
     def delete_tile(self, tile_id: str):
         """Delete a tile."""
-        with self.error_boundary.error_context(
-            component_type="tile",
-            component_id=tile_id,
-            operation="delete",
-            recovery=RecoveryStrategy.IGNORE
-        ):
+        with self.error_boundary.protect("tile_delete"):
             # Remove from all layouts
             for layout in self.layout_manager.get_all_layouts():
-                # Find and remove instances of this tile
-                instances = layout.get("tile_instances", [])
-                for instance in instances:
-                    if instance.get("tile_id") == tile_id:
-                        self.layout_manager.remove_tile_from_layout(
-                            layout["id"], 
-                            instance["instance_id"]
-                        )
+                self.layout_manager.remove_tile_instance(layout["id"], tile_id)
                 
             # Delete tile
             self.tile_manager.delete_tile(tile_id)
@@ -269,23 +251,23 @@ class PinPointApplication:
         """Get system information for diagnostics."""
         return {
             "platform": self.platform.get_system_info().to_dict(),
-            "displays": [d.to_dict() for d in self.display_manager.get_displays()],
-            "theme": self.theme_manager.get_current_theme().name,
+            "displays": [d.to_dict() for d in self.display_manager.get_all_displays()],
+            "theme": self.theme_manager.get_current_theme_name(),
             "plugins": {
-                "loaded": len(self.plugin_loader.plugins),
-                "available": len(self.plugin_loader.discover_plugins())
+                "loaded": len(self.plugin_loader.loaded_plugins),
+                "available": self.plugin_loader.list_available_plugins()
             },
             "tiles": {
-                "count": len(self.tile_manager.get_all_tiles()),
-                "types": [info.tile_type for info in self.tile_registry.get_all_types()]
+                "count": len(self.tile_manager.tiles),
+                "types": list(self.tile_manager.registry.tile_types.keys())
             },
             "layouts": {
                 "count": len(self.layout_manager.get_all_layouts()),
                 "current": self.current_layout_id
             },
             "errors": {
-                "total": len(self.error_boundary.error_history),
-                "recent": [error.to_dict() for error in self.error_boundary.error_history[-5:]]
+                "total": self.error_boundary.get_error_count(),
+                "recent": self.error_boundary.get_recent_errors(5)
             }
         }
         
@@ -297,7 +279,7 @@ class PinPointApplication:
             "tiles": self.tile_store.load(),
             "layouts": self.layout_store.load(),
             "settings": self.config_store.load(),
-            "theme": self.theme_manager.get_current_theme().name
+            "theme": self.theme_manager.get_current_theme_name()
         }
         
         with open(path, 'w') as f:
@@ -307,11 +289,7 @@ class PinPointApplication:
         
     def import_configuration(self, path: Path):
         """Import application configuration."""
-        with self.error_boundary.error_context(
-            component_type="config",
-            operation="import",
-            recovery=RecoveryStrategy.IGNORE
-        ):
+        with self.error_boundary.protect("config_import"):
             with open(path, 'r') as f:
                 config = json.load(f)
                 
@@ -322,8 +300,7 @@ class PinPointApplication:
             # Import data
             if "tiles" in config:
                 self.tile_store.save(config["tiles"])
-                # Reload tiles from storage
-                self.tile_manager._load_tiles()
+                self.tile_manager.load_tiles()
                 
             if "layouts" in config:
                 self.layout_store.save(config["layouts"])
@@ -333,7 +310,7 @@ class PinPointApplication:
                     self.config_store.set(key, value)
                     
             if "theme" in config:
-                self.theme_manager.set_current_theme(config["theme"])
+                self.theme_manager.set_theme(config["theme"])
                 
             self.logger.info("Configuration imported", data={"path": str(path)})
             
@@ -344,12 +321,11 @@ class PinPointApplication:
             
         self.logger.info("Shutting down application")
         
-        # Save any pending changes
-        self.tile_manager.save_pending_changes()
+        # Save current state
+        self.tile_manager.save_tiles()
         
         # Unload plugins
-        for plugin_id in list(self.plugin_loader.plugins.keys()):
-            self.plugin_loader.unload_plugin(plugin_id)
+        self.plugin_loader.unload_all_plugins()
         
         # Clear event subscriptions
         self.event_bus.clear()

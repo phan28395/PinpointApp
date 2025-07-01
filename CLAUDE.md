@@ -153,10 +153,10 @@ def test_event_bus_works():
 **Goal**: Separate visual design from logic
 
 **Implementation Steps**:
-- ☐ Create `design/theme.py` - Basic theming (max 150 lines)
-- ☐ Create `design/components.py` - UI component registry (max 200 lines)
-- ☐ Update one tile type to use themes
-- ☐ Create `tests/test_session6_simple.py`
+- [x] Create `design/theme.py` - Basic theming (max 150 lines)
+- [x] Create `design/components.py` - UI component registry (max 200 lines)
+- [x] Update one tile type to use themes
+- [x] Create `tests/test_session6_simple.py`
 
 ---
 
@@ -164,10 +164,10 @@ def test_event_bus_works():
 **Goal**: Proper error boundaries and recovery
 
 **Implementation Steps**:
-- ☐ Create `core/error_boundary.py` - Catch tile errors (max 150 lines)
-- ☐ Update tile manager with error handling
-- ☐ Add recovery mechanisms
-- ☐ Create `tests/test_session7_simple.py`
+- [x] Create `core/error_boundary.py` - Catch tile errors (max 150 lines)
+- [x] Update tile manager with error handling
+- [x] Add recovery mechanisms
+- [x] Create `tests/test_session7_simple.py`
 
 ---
 

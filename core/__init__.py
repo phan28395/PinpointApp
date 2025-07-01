@@ -9,6 +9,14 @@ from .tile_manager import TileManager
 from .tile_registry import TileRegistry, TileTypeInfo, get_tile_registry
 from .layout_manager import LayoutManager, TileInstance
 from .display_manager import DisplayManager, DisplayInfo, get_display_manager
+from .error_boundary import (
+    ErrorBoundary, ErrorContext, ErrorSeverity, RecoveryStrategy,
+    get_error_boundary
+)
+from .recovery import (
+    RecoveryManager, RecoveryAction, RetryAction, ResetAction,
+    FallbackAction, IsolateAction, get_recovery_manager
+)
 
 __all__ = [
     # Constants
@@ -44,4 +52,12 @@ __all__ = [
     
     # Display Management
     'DisplayManager', 'DisplayInfo', 'get_display_manager',
+    
+    # Error Handling
+    'ErrorBoundary', 'ErrorContext', 'ErrorSeverity', 'RecoveryStrategy',
+    'get_error_boundary',
+    
+    # Recovery
+    'RecoveryManager', 'RecoveryAction', 'RetryAction', 'ResetAction',
+    'FallbackAction', 'IsolateAction', 'get_recovery_manager',
 ]

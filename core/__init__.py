@@ -1,10 +1,10 @@
-
 # core/__init__.py
 """Core module initialization."""
 
 from .constants import *
 from .exceptions import *
-from .events import EventBus, EventError, get_event_bus
+from .events import EventBus, EventError, get_event_bus, configure_event_bus
+from .logger import Logger, LogLevel, get_logger, configure_global_logger
 
 __all__ = [
     # Constants
@@ -27,5 +27,8 @@ __all__ = [
     'PluginError', 'ValidationError',
     
     # Events
-    'EventBus', 'EventError', 'get_event_bus',
+    'EventBus', 'EventError', 'get_event_bus', 'configure_event_bus',
+    
+    # Logger
+    'Logger', 'LogLevel', 'get_logger', 'configure_global_logger',
 ]

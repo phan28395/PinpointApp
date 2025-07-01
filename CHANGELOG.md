@@ -5,7 +5,75 @@ All notable changes to the PinPoint architecture refactor will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### Session 1: Minimal Core Foundation - 2025-01-07
+## [Unreleased]
+
+### Session 2: Add Logging & Storage Abstraction - 2024-12-19
+
+#### Added
+- **Logging System**
+  - `core/logger.py` - Simple JSON logger with file/console output (149 lines)
+  - Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  - Structured data support for contextual logging
+  - Global logger singleton via `get_logger()`
+  - Configure function: `configure_global_logger()`
+
+- **Storage Abstraction Layer**
+  - `data/base_store.py` - Abstract storage interface (96 lines)
+  - `data/json_store.py` - JSON file implementation (148 lines)
+  - `data/__init__.py` - Module exports (7 lines)
+  - Atomic saves using temporary files
+  - Backup functionality for data safety
+  - Common operations: get/set/delete/clear/keys
+
+- **Testing**
+  - `tests/test_session2_simple.py` - Storage and logger tests (241 lines)
+  - 10 tests covering all new functionality
+  - Tests for error handling and edge cases
+
+#### Changed
+- **EventBus Enhancement**
+  - `core/events.py` - Added optional logger support (172 lines, +15)
+  - New `configure_event_bus()` function for logger integration
+  - Maintains backward compatibility (logger is optional)
+  
+- **Core Module Updates**
+  - `core/__init__.py` - Added logger exports
+
+#### Design Decisions
+- **Logger Independence**: Logger has no EventBus dependency, preventing circular imports
+- **JSON Format**: Human-readable logs that can be easily parsed and analyzed
+- **Storage Interface**: Abstract base class allows future backends (SQLite, Redis, etc.)
+- **Atomic Writes**: JSON store uses temp file + rename for data integrity
+- **Optional Integration**: Components can work with or without logger
+
+#### Implementation Details
+- Logger writes each entry as a single JSON line (JSONL format)
+- Storage abstraction provides both low-level (load/save) and high-level (get/set) APIs
+- Error handling uses existing StorageError from Session 1
+- All file I/O includes proper error handling and cleanup
+
+#### Known Limitations
+- Logger doesn't rotate files (single file grows indefinitely)
+- No async logging support
+- JSON store loads entire file into memory
+- No compression or encryption
+- No concurrent access handling for JSON store
+
+#### Metrics
+- Total new lines of code: 570
+- Updated lines: 50
+- Test coverage: All public APIs tested
+- Dependencies: Clean (Logger is Layer 3, independent)
+- File count: 7 files (5 new, 2 updated)
+
+#### Next Steps
+- Session 3: Refactor tile manager using events and storage
+- Session 4: Basic plugin system
+- Session 5: Layout management
+
+---
+
+### Session 1: Minimal Core Foundation - 2024-12-19
 
 #### Added
 - **Core Module Structure**

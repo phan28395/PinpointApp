@@ -7,6 +7,120 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Session 6: Design System Foundation - 2024-12-19
+
+#### Added
+- **Theme System**
+  - `design/theme.py` - Complete theming system (150 lines)
+  - `ColorScheme` dataclass with semantic color definitions
+  - `Typography` dataclass for font settings
+  - `Spacing` dataclass for consistent spacing
+  - `Effects` dataclass for visual effects
+  - Built-in themes: dark, light, high_contrast
+  - Theme manager with theme switching
+
+- **Component Registry**
+  - `design/components.py` - UI component style generation (192 lines)
+  - `ComponentType` enum for standard components
+  - `StyleGenerator` class for theme-based styles
+  - `ComponentRegistry` for centralized style access
+  - Tile-specific component styles
+
+- **Example Implementation**
+  - `examples/themed_note_tile.py` - Example of themed tile (95 lines)
+  - Shows pattern for updating tiles to use themes
+  - Demonstrates theme switching
+
+- **Module Structure**
+  - `design/__init__.py` - Clean module exports (17 lines)
+
+- **Testing**
+  - `tests/test_session6_simple.py` - Design system tests (215 lines)
+  - 10 tests covering all functionality
+  - Theme integration testing
+
+#### Design Philosophy
+- **Separation of Concerns**: Visual design separated from logic
+- **Theme-Based**: All styling derived from theme values
+- **Semantic Colors**: Colors have meaning (primary, success, error)
+- **Consistent Spacing**: Based on 8px unit system
+- **Component Reuse**: Standard components with variants
+
+#### Theme Structure
+```python
+Theme = {
+    colors: {bg_primary, text_primary, accent, ...},
+    typography: {font_family, font_sizes, weights, ...},
+    spacing: {xs: 8, sm: 16, md: 24, ...},
+    effects: {radius, shadows, transitions, ...}
+}
+```
+
+#### Style Generation Pattern
+```python
+# Get registry
+registry = get_component_registry()
+
+# Generate style for component
+style = registry.get_style(
+    ComponentType.BUTTON,
+    variant="primary",  # primary, secondary, danger
+    size="md",         # xs, sm, md, lg, xl
+    custom_props={}    # Optional overrides
+)
+```
+
+#### Built-in Themes
+1. **Dark** (default): Dark backgrounds, light text
+2. **Light**: White backgrounds, dark text  
+3. **High Contrast**: Pure black/white with yellow accents
+
+#### Component Types
+- Basic: label, button, text_edit, text_display
+- Containers: frame, scroll_area, group_box
+- Input: line_edit, spin_box, combo_box, checkbox, etc.
+- Tile-specific: tile_container, tile_header, drag_handle, etc.
+
+#### Implementation Details
+- Styles returned as CSS-like strings for Qt
+- Theme manager is a singleton
+- Component registry caches style generator
+- Custom style generators can be registered
+- All measurements in pixels
+
+#### Migration Strategy
+1. Update tile widgets to request styles from registry
+2. Replace hardcoded colors with theme values
+3. Use semantic variants (primary, secondary, etc.)
+4. Apply consistent spacing from theme
+
+#### Known Limitations
+- Styles are Qt-specific (QPushButton, QLabel, etc.)
+- No style inheritance/cascading
+- No dynamic theme creation UI
+- No theme persistence settings
+- Limited style parsing/merging
+
+#### Metrics
+- Total new lines of code: 669
+- Built-in themes: 3
+- Component types: 16
+- Test coverage: All public APIs tested
+- File count: 5 files
+
+#### Benefits
+- **Consistency**: All UI uses same design values
+- **Maintainability**: Change theme, update entire app
+- **Accessibility**: High contrast theme included
+- **Extensibility**: Easy to add new themes/components
+
+#### Next Steps
+- Session 7: Error handling
+- Session 8: Test infrastructure
+- Future: Theme persistence, custom theme editor
+
+---
+
 ### Session 5: Layout Management - 2024-12-19
 
 #### Added

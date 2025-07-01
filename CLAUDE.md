@@ -186,9 +186,9 @@ def test_event_bus_works():
 **Goal**: Basic cross-platform compatibility
 
 **Implementation Steps**:
-- ☐ Create `platform/base.py` - Platform abstraction
-- ☐ Create `platform/windows.py` - Windows specifics
-- ☐ Create `platform/mac.py` - Mac specifics
+- ☐ Create `platform_support/base.py` - Platform abstraction
+- ☐ Create `platform_support/windows.py` - Windows specifics
+- ☐ Create `platform_support/mac.py` - Mac specifics
 - ☐ Update system tray and file paths
 
 ---
@@ -228,7 +228,7 @@ pinpoint/                    # PROJECT ROOT - Always work from here
 │   ├── __init__.py
 │   ├── theme.py
 │   └── components.py
-├── platform/               # Platform support (Session 9)
+├── platform_support/               # Platform support (Session 9)
 │   ├── __init__.py
 │   ├── base.py
 │   ├── windows.py

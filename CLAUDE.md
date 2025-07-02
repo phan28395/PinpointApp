@@ -1,38 +1,207 @@
-# CLAUDE.md - PinPoint Architecture Refactor Guide
+# CLAUDE.md - PinPoint Architecture Redesign Plan
 
-## 🎯 The One Rule
-**"If it works, it's good enough. If it's simple, it's even better."**
+## Overview
+PinPoint is a desktop application for creating floating widgets (tiles) that can be positioned anywhere on screen. This document outlines a pragmatic, step-by-step plan to refactor PinPoint from a monolithic application to a modular, extensible platform.
 
-This is a PRAGMATIC refactor. We're building something that works, not something perfect.
+## 🎯 Core Principles (LEARNED FROM FIRST ATTEMPT)
+
+### 1. Start Simple, Enhance Gradually
+- Each session builds ONE thing that works
+- No complex infrastructure until basics are solid
+- Test infrastructure comes AFTER core functionality
+
+### 2. Clear Dependencies
+```
+Layer 0: constants (no dependencies)
+Layer 1: exceptions (uses constants only)
+Layer 2: events (uses exceptions only)
+Layer 3: logger (uses events only)
+Layer 4: everything else
+```
+
+### 3. Import Structure (CRITICAL - READ THIS FIRST)
+```
+PROJECT ROOT: pinpoint/
+WORKING DIRECTORY: Always run from pinpoint/
+
+IMPORTS WITHIN PROJECT:
+from core.events import EventBus     # ✓ CORRECT
+from storage import StorageManager    # ✓ CORRECT
+from pinpoint.core.events import ...  # ✗ WRONG
+
+IMPORTS IN TESTS:
+# Add at top of every test file:
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Then import normally:
+from core.events import EventBus
+```
+
+### 4. Testing Philosophy
+- Start with 3-5 SIMPLE tests per component
+- No test reports/infrastructure until Session 8
+- Use plain `assert` statements first
+- Complex test features are a luxury, not a necessity
+
+## 📋 Architecture Goals (Simplified)
+1. **Modular Design**: Reasonable file sizes (300-500 lines)
+2. **Clear Dependencies**: No circular imports
+3. **Plugin Ready**: Extensible but start simple
+4. **Stable Core**: Don't break existing functionality
+5. **Testable**: But don't over-engineer tests
+
+## 🚀 Session Plan (Revised for Clarity)
+
+### Session 1: Minimal Core Foundation
+**Goal**: Create the absolute minimum working foundation
+
+**Implementation Steps**:
+- [x] Create `core/constants.py` - App constants (max 100 lines)
+- [x] Create `core/exceptions.py` - Simple exceptions (max 100 lines)
+- [x] Create `core/events.py` - Basic event bus (max 200 lines)
+- [x] Create simple tests in `tests/test_session1_simple.py` (max 100 lines)
+
+**Key Decisions**:
+- EventBus has NO logger dependency (just print for debugging)
+- Exceptions are simple classes, no fancy serialization yet
+- Constants are just variables, no validation
+
+**Test Requirements**:
+```python
+def test_event_bus_works():
+    bus = EventBus()
+    received = []
+    bus.subscribe("test", lambda e: received.append(e))
+    bus.emit("test", {})
+    assert len(received) == 1
+
+# That's it! 5-10 simple tests like this
+```
+
+**Deliverables**:
+- Working event system
+- Basic exceptions
+- Simple constants
+- 5-10 passing tests
+- NO test reports, NO complex infrastructure
 
 ---
 
-## 🏗️ Architecture Layers (Dependency Order)
+### Session 2: Add Logging & Storage Abstraction
+**Goal**: Add logging and basic storage abstraction
 
-### Layer 0: Constants
-- Just data (colors, sizes, defaults)
-- No imports from our code
-- Anyone can import these
+**Implementation Steps**:
+- [x] Create `core/logger.py` - Simple JSON logger (max 150 lines)
+- [x] Create `data/base_store.py` - Abstract storage interface (max 100 lines)
+- [x] Create `data/json_store.py` - JSON implementation (max 150 lines)
+- [x] Update EventBus to optionally use logger
+- [x] Create `tests/test_session2_simple.py` (max 150 lines)
 
-### Layer 1: Exceptions  
-- Custom errors for better debugging
-- Can only import from Layer 0
-- Keep it simple - just error classes
+**Key Decisions**:
+- Logger is independent (doesn't use EventBus)
+- Storage abstraction is minimal (just load/save)
+- Still no complex test infrastructure
 
-### Layer 2: Events
-- Event bus for loose coupling  
-- Can import from Layers 0-1
-- This is our communication backbone
+---
 
-### Layer 3: Logger & Utilities
-- Logger is INDEPENDENT (no event bus import!)
-- Helper functions that don't fit elsewhere
-- Can import from Layers 0-1 only
+### Session 3: Refactor Tile Manager
+**Goal**: Clean up tile manager using events and storage abstraction
 
-### Layer 4: Everything Else
-- Storage, Tiles, Plugins, Layouts, UI
-- Can import from Layers 0-3
-- These are the "business logic" components
+**Implementation Steps**:
+- [x] Create `core/tile_manager.py` - Using events & storage (max 300 lines)
+- [x] Create `core/tile_registry.py` - Track tile types (max 150 lines)
+- [x] Migrate existing tile functionality
+- [x] Create `tests/test_session3_simple.py`
+
+**Key Decisions**:
+- Tile manager uses events for all state changes
+- No UI dependencies in core
+- Keep existing tile functionality working
+
+---
+
+### Session 4: Basic Plugin System
+**Goal**: Minimal plugin system that works
+
+**Implementation Steps**:
+- [x] Create `plugins/base.py` - Simple plugin interface (max 100 lines)
+- [x] Create `plugins/loader.py` - Basic loading (max 200 lines)
+- [x] Create one example plugin
+- [x] Create `tests/test_session4_simple.py`
+
+**Key Decisions**:
+- Plugins are just Python classes with a specific interface
+- No sandboxing yet (trust plugins)
+- No hot reloading (restart required)
+
+---
+
+### Session 5: Layout Management
+**Goal**: Clean layout system using events
+
+**Implementation Steps**:
+- [x] Create `core/layout_manager.py` - Layout logic (max 250 lines)
+- [x] Create `core/display_manager.py` - Display abstraction (max 200 lines)
+- [x] Migrate existing layout functionality
+- [x] Create `tests/test_session5_simple.py`
+
+---
+
+### Session 6: Design System Foundation
+**Goal**: Separate visual design from logic
+
+**Implementation Steps**:
+- [x] Create `design/theme.py` - Basic theming (max 150 lines)
+- [x] Create `design/components.py` - UI component registry (max 200 lines)
+- [x] Update one tile type to use themes
+- [x] Create `tests/test_session6_simple.py`
+
+---
+
+### Session 7: Error Handling
+**Goal**: Proper error boundaries and recovery
+
+**Implementation Steps**:
+- [x] Create `core/error_boundary.py` - Catch tile errors (max 150 lines)
+- [x] Update tile manager with error handling
+- [x] Add recovery mechanisms
+- [x] Create `tests/test_session7_simple.py`
+
+---
+
+### Session 8: Test Infrastructure (FINALLY!)
+**Goal**: NOW we add proper test infrastructure
+
+**Implementation Steps**:
+- [x] Create `tests/base_test.py` - Test base class with reporting
+- [x] Create `tests/runner.py` - Test runner with reports
+- [x] Update all existing tests to use new infrastructure
+- [x] Generate first comprehensive test report
+
+---
+
+### Session 9: Platform Support
+**Goal**: Basic cross-platform compatibility
+
+**Implementation Steps**:
+- [x] Create `platform_support/base.py` - Platform abstraction
+- [x] Create `platform_support/windows.py` - Windows specifics
+- [x] Create `platform_support/mac.py` - Mac specifics
+- [x] Update system tray and file paths
+
+---
+
+### Session 10: Integration & Polish
+**Goal**: Tie everything together
+
+**Implementation Steps**:
+- [x] Create `app/application.py` - Main app using all systems
+- [x] Update `main.py` to use new architecture
+- [x] Comprehensive integration tests
+- [x] Performance benchmarks
+- [x] Migration guide for users
 
 ---
 
@@ -59,7 +228,7 @@ pinpoint/                    # PROJECT ROOT - Always work from here
 │   ├── __init__.py
 │   ├── theme.py
 │   └── components.py
-├── platform_support/       # Platform support (Session 9)
+├── platform_support/               # Platform support (Session 9)
 │   ├── __init__.py
 │   ├── base.py
 │   ├── windows.py
@@ -73,251 +242,61 @@ pinpoint/                    # PROJECT ROOT - Always work from here
 └── main.py
 ```
 
----
-
-## 🧪 Testing Philosophy
-
-### The Golden Rule
-**Test the interface, not the implementation**
-
-### For Sessions 1-9: Simple Unit Tests
-- Use basic `assert` statements
-- Test the happy path
-- 5-10 tests per session
-- Each test < 20 lines
-- Example:
-```python
-def test_event_subscribe():
-    bus = EventBus()
-    received = []
-    bus.subscribe("test", lambda data: received.append(data))
-    bus.emit("test", {"value": 1})
-    assert len(received) == 1
-    assert received[0]["value"] == 1
-```
-
-### For Session 10: Accept Reality
-Integration is different. When you're testing the whole system working together:
-- Tests WILL be longer (50-100 lines is OK)
-- Setup WILL be more complex
-- You WILL need to manage state
-- **This is normal and expected!**
-
----
-
-## 📋 Session Implementation Steps
-
-### Sessions 1-5: Core Foundation
-**Goal**: Build the essential pieces
-
-### Session 1: Event System
-- [x] Create event bus for component communication
-- [x] No complex features - just subscribe/emit
-- [x] Simple tests with assert
-
-### Session 2: Storage & Logging  
-- [x] JSON file storage with simple interface
-- [x] Basic logger (no event bus dependency!)
-- [x] Test file operations work
-
-### Session 3: Tile Management
-- [x] Tile manager using events and storage
-- [x] Tile registry for tile types
-- [x] Test CRUD operations
-
-### Session 4: Plugin System
-- [x] Basic plugin loader
-- [x] Plugin interface definition
-- [x] Test plugin discovery
-
-### Session 5: Layout Management
-- [x] Layout manager for tile arrangements
-- [x] Display manager for monitors
-- [x] Test layout operations
-
-### Sessions 6-9: Enhancements
-
-### Session 6: Design System
-- [x] Theme management (dark/light/high-contrast)
-- [x] Component style registry
-- [x] Test theme switching
-
-### Session 7: Error Handling
-- [x] Error boundaries for resilience
-- [x] Recovery strategies
-- [x] Test error recovery
-
-### Session 8: Test Infrastructure
-- [x] NOW we add proper test framework
-- [x] Test runner with reports
-- [x] Keep using for remaining sessions
-
-### Session 9: Platform Support
-- [x] Cross-platform file paths
-- [x] OS-specific features
-- [x] Test on current platform only
-
-### Session 10: Integration & Polish
-**Goal**: Tie everything together - KEEP IT SIMPLE!
-
-**Implementation Steps**:
-- [ ] Create `app/application.py` - Main app using all systems
-- [ ] Update `main.py` to use new architecture
-- [ ] Write 3-5 integration tests that verify the app works
-- [ ] Create simple migration guide
-
-**What IS Session 10**:
-- A `PinPointApplication` class that initializes all components
-- A few methods to coordinate between systems
-- Basic lifecycle management (init, run, shutdown)
-- 300-500 lines of integration code
-
-**What IS NOT Session 10**:
-- A complex orchestration framework
-- Elaborate configuration system  
-- Fancy dependency injection
-- Perfect test coverage
-
-**Integration Test Approach**:
-Since integration tests are naturally more complex, embrace it:
-
-```python
-# tests/test_session10_simple.py (if not using test framework)
-# OR tests/test_session10_integration.py (if using test framework)
-
-def test_app_creates_tile():
-    """Test that the app can create and retrieve a tile."""
-    # Setup - Yes, this is more complex than unit tests
-    import tempfile
-    import shutil
-    temp_dir = tempfile.mkdtemp()
-    
-    try:
-        # Create app
-        from app import PinPointApplication
-        app = PinPointApplication(config_path=Path(temp_dir))
-        app.initialize()
-        
-        # Test
-        tile_id = app.tile_manager.create_tile("note", content="Hello")
-        tile = app.tile_manager.get_tile(tile_id)
-        assert tile is not None
-        assert tile["content"] == "Hello"
-        
-        # Verify it persisted
-        app2 = PinPointApplication(config_path=Path(temp_dir))
-        app2.initialize()
-        tile2 = app2.tile_manager.get_tile(tile_id)
-        assert tile2 is not None
-        
-    finally:
-        # Cleanup - Yes, we need this
-        shutil.rmtree(temp_dir, ignore_errors=True)
-        # Reset singletons if needed
-        
-# THAT'S OK! Integration tests are supposed to be like this!
-```
-
----
-
-## 🎯 Success Metrics (Realistic)
+## ✅ Success Metrics (Realistic)
 - Each session's code works and passes tests
 - No circular dependencies
 - Existing functionality still works
 - Can add new tile types easily (by Session 6)
 - Tests are maintainable and fast
 
----
+## 🛠️ Development Guidelines
+
+### Before Each Session:
+1. Read the session goals (keep them modest)
+2. Check that previous session's code works
+3. Don't add "nice to have" features
+
+### During Each Session:
+1. Write the simplest code that works
+2. Test as you go with simple tests
+3. Don't optimize prematurely
+4. If it's getting complex, stop and simplify
+
+### After Each Session:
+1. Run the simple tests
+2. Verify existing functionality works
+3. Commit working code
+4. Don't add complex infrastructure
 
 ## 🚨 Common Pitfalls to Avoid
 
-1. **Over-architecting**: We're refactoring, not rewriting from scratch
-2. **Test paralysis**: If it's too hard to test, simplify the code
-3. **Scope creep**: Each session has specific goals - stick to them
-4. **Premature optimization**: Make it work first, fast later
-5. **Framework envy**: This is a desktop app, not a web service
+1. **Over-engineering Early**: Don't add logging to EventBus in Session 1
+2. **Complex Test Infrastructure**: Simple asserts until Session 8
+3. **Circular Dependencies**: Check dependency layers
+4. **Import Confusion**: Always work from pinpoint/ directory
+5. **Feature Creep**: Stick to session goals
 
-### The Import Problem
-Always use this pattern to avoid import errors:
-```python
-import sys
-from pathlib import Path
+## 📝 Document Change Policy
+Changes to this document require:
+1. Clear justification in CHANGELOG.md
+2. Approval based on actual implementation experience
+3. Updates marked with [UPDATED: Session X - Date]
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+## 🎓 Lessons from Session 1
 
-# Now import our modules
-from core.events import get_event_bus
-```
+### What Went Wrong:
+- Too much complexity in first session
+- Test infrastructure before core was stable  
+- Unclear import structure
+- Circular dependency (EventBus → Logger)
+- Weak reference tests with bound methods
 
----
+### What We Learned:
+- Start simpler than you think necessary
+- Test infrastructure is not core functionality
+- Clear import docs save hours of debugging
+- Python quirks matter (weak refs + methods)
+- Perfect is the enemy of good
 
-## 💡 Design Decisions
-
-### Why Singletons?
-- Desktop app = one instance of each manager
-- Simple access pattern: `get_thing()`
-- Easy to reset for testing (add reset methods in Session 10)
-
-### Why Events?
-- Decouple UI from business logic
-- Easy to add new features without changing core
-- Natural fit for user interactions
-
-### Why Simple Tests?
-- Complex tests break easily
-- Hard to understand = hard to maintain  
-- We need confidence, not coverage metrics
-
----
-
-## 📝 Quick Patterns
-
-### Creating a Manager (Layer 4)
-```python
-class ThingManager:
-    def __init__(self, store: BaseStore):
-        self.store = store
-        self.logger = get_logger()
-        self.event_bus = get_event_bus()
-        
-    def create_thing(self, data):
-        # Validate
-        if not data.get("name"):
-            raise ValidationError("Name required")
-            
-        # Create
-        thing = {"id": str(uuid.uuid4()), **data}
-        
-        # Save
-        self.store.set(f"thing:{thing['id']}", thing)
-        
-        # Notify
-        self.event_bus.emit("thing:created", thing)
-        
-        return thing["id"]
-```
-
-### Testing a Manager
-```python
-def test_create_thing():
-    # Setup
-    store = JSONStore(":memory:")  # In-memory for tests
-    manager = ThingManager(store)
-    
-    # Test
-    thing_id = manager.create_thing({"name": "Test"})
-    assert thing_id is not None
-    
-    # Verify
-    thing = store.get(f"thing:{thing_id}")
-    assert thing["name"] == "Test"
-```
-
----
-
-## 🎉 Remember
-
-We're 90% done! Session 10 is just putting the pieces together. If integration tests feel complex, that's because integration IS complex. The architecture is working great - don't let test complexity discourage you.
-
-**Done is better than perfect!**
+### Key Insight:
+**Build something that works, then make it better. Don't try to build the perfect system from day one.**

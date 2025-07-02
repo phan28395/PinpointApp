@@ -144,66 +144,81 @@ class TestSession10Integration(BaseTest):
             self.assert_true(light_bg.group(1) != hc_bg.group(1), "Background colors should be different")
         
     def test_plugin_system_integration(self):
-        """Test plugin loading and tile type registration."""
+        """Test plugin system integration with tiles."""
+        import textwrap
+        
         # Create plugin directory
         plugin_dir = Path(self.temp_dir) / "plugins"
         plugin_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create a test plugin with proper encoding
-        plugin_file = plugin_dir / "test_plugin.py"
-        plugin_content = """
-from plugins.base import BasePlugin, PluginMetadata
-from core.tile_registry import get_tile_registry, TileTypeInfo
-
-class TestPlugin(BasePlugin):
-    def get_metadata(self):
-        return PluginMetadata(
-            id="test_plugin",
-            name="Test Plugin",
-            version="1.0.0",
-            author="Test",
-            description="Test plugin",
-            tile_types=["custom_tile"]
-        )
-    
-    def initialize(self):
-        # Register custom tile type
-        registry = get_tile_registry()
-        registry.register_type(TileTypeInfo(
-            tile_type="custom_tile",
-            name="Custom Tile",
-            description="A custom tile type",
-            icon="CT",  # Simple ASCII instead of emoji
-            category="Custom",
-            default_config={},
-            capabilities=["test"]
-        ))
-        return True
+        # Create a test plugin with proper encoding and imports
+        plugin_file = plugin_dir / "custom_plugin.py"
         
-    def shutdown(self):
-        registry = get_tile_registry()
-        registry.unregister_type("custom_tile")
+        # Use textwrap.dedent to handle indentation properly
+        plugin_content = textwrap.dedent(f'''\
+            import sys
+            from pathlib import Path
+            # Add the parent directories to path so imports work
+            sys.path.insert(0, r'{str(Path(__file__).parent.parent.parent)}')
+            
+            from plugins.base import BasePlugin, PluginMetadata
+            from core.tile_registry import get_tile_registry, TileTypeInfo
+            
+            class CustomTestPlugin(BasePlugin):
+                def get_metadata(self):
+                    return PluginMetadata(
+                        plugin_id="custom_test_plugin",
+                        name="Custom Test Plugin",
+                        version="1.0.0",
+                        author="Test",
+                        description="Test plugin for integration testing",
+                        tile_types=["custom_tile"]
+                    )
+                
+                def initialize(self):
+                    # Register custom tile type
+                    registry = get_tile_registry()
+                    registry.register_type(TileTypeInfo(
+                        tile_type="custom_tile",
+                        name="Custom Tile",
+                        description="A custom tile type",
+                        icon="CT",
+                        category="Custom",
+                        default_config={{}},
+                        capabilities=["test"]
+                    ))
+                    return True
+                    
+                def shutdown(self):
+                    registry = get_tile_registry()
+                    registry.unregister_type("custom_tile")
+                    
+                def create_tile_widget(self, tile_type, tile_data):
+                    return {{"type": "custom_widget", "data": tile_data}}
+        ''')
         
-    def create_tile_widget(self, tile_data):
-        return {"type": "custom_widget", "data": tile_data}
-
-plugin_class = TestPlugin
-"""
         plugin_file.write_text(plugin_content, encoding='utf-8')
         
-        # Load plugins
-        config_store = JSONStore(Path(self.temp_dir) / "config.json")
-        plugin_loader = PluginLoader([plugin_dir])  # Pass as list
-        plugin_loader.load_all_plugins()
+        # Create a plugin loader without builtin plugins
+        plugin_loader = PluginLoader([])  # Empty list to avoid builtin plugins
+        plugin_loader.plugin_dirs = [plugin_dir]  # Set only our test directory
         
-        # Verify plugin was loaded
+        # Debug: check what files are discovered
+        discovered = plugin_loader.discover_plugins()
+        self.assert_equal(len(discovered), 1, f"Should discover 1 plugin file, got {len(discovered)}")
+        
+        # Load plugins
+        loaded_count = plugin_loader.load_all_plugins()
+        
+        # Verify only our plugin was loaded
         loaded_plugins = plugin_loader.get_all_plugins()
-        self.assert_equal(len(loaded_plugins), 1)
+        self.assert_equal(len(loaded_plugins), 1, f"Expected 1 plugin, got {len(loaded_plugins)}: {list(loaded_plugins.keys())}")
+        self.assert_in("custom_test_plugin", loaded_plugins, "Custom test plugin should be loaded")
         
         # Verify tile type was registered
         registry = get_tile_registry()
-        self.assert_true(registry.is_valid_type("custom_tile"))
-        
+        self.assert_true(registry.is_valid_type("custom_tile"), "Custom tile type should be registered")
+    
     def test_platform_integration(self):
         """Test platform-specific functionality."""
         platform = get_platform()

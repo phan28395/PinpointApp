@@ -409,8 +409,16 @@ Nice to Have (Year 1):
 ## 4. High-Level Architecture
 
 ### 4.1 Architecture Style
-- **Pattern**: <!-- e.g., Microservices, Monolithic, Serverless -->
-- **Justification**: <!-- Why this pattern was chosen -->
+- **Pattern**: Hybrid Client-Service Architecture with Plugin System
+Core: Monolithic desktop application (for performance)
+Widgets: Plugin-based architecture (for isolation)
+Backend: Microservices (for scalability)
+- **Justification**: 
+Monolithic Core: Native performance requires tight integration with OS. Shared resources (renderer, compositor) work best in single process
+Plugin Widgets: Each widget runs in isolated sandbox - security through separation while maintaining performance through shared runtime
+Microservices Backend: Widget store, user accounts, and sync services scale independently. Can add AI services, analytics without affecting core
+Why not pure microservices: Desktop performance requires native integration. Network latency would kill the "iPhone smooth" experience
+Why not pure monolithic: Widgets need isolation for security. Mixed architecture gives best of both worlds
 
 ### 4.2 System Context
 
@@ -424,25 +432,168 @@ graph TB
 ### 4.3 Component Overview
 
 ```mermaid
-graph LR
-    Client[Client Layer]
-    API[API Gateway]
-    Services[Service Layer]
-    Data[Data Layer]
+graph TB
+    Users[End Users] --> PinPoint[PinPoint Desktop App]
+    Developers[Widget Developers] --> DevPortal[Developer Portal]
+    Admins[IT Admins] --> AdminPortal[Admin Console]
     
-    Client --> API
-    API --> Services
-    Services --> Data
+    PinPoint --> WidgetStore[Widget Store API]
+    PinPoint --> SyncService[Sync Service]
+    PinPoint --> AuthService[Auth Service]
+    
+    DevPortal --> WidgetStore
+    DevPortal --> Analytics[Analytics Service]
+    
+    AdminPortal --> Enterprise[Enterprise API]
+    AdminPortal --> AuditService[Audit Service]
+    
+    PinPoint -.->|Declared Routes| WeatherAPI[Weather APIs]
+    PinPoint -.->|Declared Routes| StockAPI[Stock APIs]
+    PinPoint -.->|Declared Routes| DevServers[Developer Servers]
+    
+    WidgetStore --> CDN[Widget CDN]
+    SyncService --> CloudStorage[(Encrypted Storage)]
+    
+    style PinPoint fill:#f9f,stroke:#333,stroke-width:4px
+    style Users fill:#9f9,stroke:#333,stroke-width:2px
+    style Developers fill:#9f9,stroke:#333,stroke-width:2px
 ```
 
 #### Component Responsibilities
-| Component | Responsibility |
-|-----------|----------------|
-| <!-- Component 1 --> | <!-- Description --> |
-| <!-- Component 2 --> | <!-- Description --> |
-
+graph LR
+    subgraph "Desktop Client"
+        UI[Native UI Layer]
+        Core[PinPoint Core]
+        Sandbox[Widget Sandboxes]
+        Renderer[Native Renderer]
+    end
+    
+    subgraph "Route System"
+        RouteManager[Route Manager]
+        PermissionEngine[Permission Engine]
+        AuditLogger[Audit Logger]
+    end
+    
+    subgraph "Backend Services"
+        Gateway[API Gateway]
+        Store[Store Service]
+        Sync[Sync Service]
+        Auth[Auth Service]
+        Review[Review Service]
+    end
+    
+    subgraph "Storage"
+        WidgetDB[(Widget Registry)]
+        UserDB[(User Data)]
+        AuditDB[(Audit Logs)]
+    end
+    
+    UI --> Core
+    Core --> Sandbox
+    Core --> Renderer
+    Core --> RouteManager
+    
+    RouteManager --> PermissionEngine
+    RouteManager --> AuditLogger
+    
+    Core --> Gateway
+    Gateway --> Store
+    Gateway --> Sync
+    Gateway --> Auth
+    
+    Store --> Review
+    Store --> WidgetDB
+    Sync --> UserDB
+    AuditLogger --> AuditDB
+    
+    style Core fill:#f96,stroke:#333,stroke-width:2px
+    style RouteManager fill:#9cf,stroke:#333,stroke-width:2px
 ---
+### 4.4 Data Flow for Key Scenarios
+- Installing a Widget:
+sequenceDiagram
+    User->>UI: Browse Store
+    UI->>Core: Request Widget List
+    Core->>Gateway: GET /widgets
+    Gateway->>Store: Fetch Popular
+    Store-->>Gateway: Widget List
+    Gateway-->>Core: Widget Data
+    Core-->>UI: Display Widgets
+    
+    User->>UI: Install Widget
+    UI->>Core: Download Widget
+    Core->>RouteManager: Validate Routes
+    RouteManager->>PermissionEngine: Check Permissions
+    PermissionEngine-->>UI: Show Permission Dialog
+    User->>UI: Approve
+    
+    Core->>Gateway: Download Widget Package
+    Gateway->>CDN: Fetch Package
+    CDN-->>Core: Widget Code
+    Core->>Sandbox: Create New Sandbox
+    Sandbox->>Renderer: Register Widget
+    Renderer-->>UI: Widget Displayed
 
+- Widget Accessing Data (Route Enforcement):
+sequenceDiagram
+    Widget->>Sandbox: fetch("weather.com/api")
+    Sandbox->>RouteManager: Check Route Permission
+    RouteManager->>RouteManager: Validate Against Declared Routes
+    alt Route Allowed
+        RouteManager->>AuditLogger: Log Access
+        RouteManager-->>Sandbox: Permission Granted
+        Sandbox->>Network: Make Request
+        Network-->>Widget: Weather Data
+    else Route Blocked
+        RouteManager->>AuditLogger: Log Violation
+        RouteManager-->>Sandbox: Permission Denied
+        Sandbox-->>Widget: Error: Unauthorized Route
+    end
+
+### 4.5 Deployment View
+graph TB
+    subgraph "User's Computer"
+        PinPointApp[PinPoint.app/exe]
+        LocalStorage[(Local Widget Data)]
+        GPU[GPU - Native Rendering]
+    end
+    
+    subgraph "PinPoint Cloud - AWS/Azure"
+        subgraph "Frontend"
+            CloudFront[CDN - Widget Downloads]
+            ALB[Load Balancer]
+        end
+        
+        subgraph "Application Layer"
+            API1[API Server 1]
+            API2[API Server 2]
+            Review1[Review Worker]
+        end
+        
+        subgraph "Data Layer"
+            RDS[(PostgreSQL - Metadata)]
+            S3[(S3 - Widget Packages)]
+            DynamoDB[(DynamoDB - User Prefs)]
+        end
+    end
+    
+    subgraph "Developer Infrastructure"
+        DevAPI[Developer APIs]
+        DevPortal[Dev Portal Web]
+    end
+    
+    PinPointApp --> CloudFront
+    PinPointApp --> ALB
+    ALB --> API1
+    ALB --> API2
+    
+    API1 --> RDS
+    API1 --> S3
+    API1 --> DynamoDB
+    
+    DevAPI --> Review1
+    Review1 --> S3
+    
 ## 5. Detailed Design
 
 ### 5.1 Component Architecture

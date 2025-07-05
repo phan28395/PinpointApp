@@ -72,20 +72,19 @@ Older laptop:
 
 ---
 
-### Decision 5: Route-Based Data Flow
-**What we chose:** Pre-defined data paths that users can understand
+### Decision 5: Route-Based Data Flow and System Permission Routes
+**What we chose:** Pre-defined data and system paths that users can understand
 
 **The routes:**
-1. **🟢 Local-Only** - Like iPhone's Notes app in airplane mode
-2. **🟡 Encrypted-Sync** - Like iPhone's iMessage (encrypted)
-3. **🟠 Smart-Features** - Like iPhone's Siri suggestions
-4. **🔴 Full-Connected** - Like iPhone's social media apps
+- Data Routes: Control where data can flow (servers (which level of encryption), storage)
+- System Routes: Control what system resources widgets can access
 
 **Why this matters:**
-- Users understand their privacy choices
 - Developers know the rules upfront
 - No confusion or hidden behaviors
-
+- Complete transparency: Users see both "where data goes" AND "what system access"
+- Better security: Can't access clipboard without declaring it
+- Clearer permissions: "This widget needs camera access" is obvious
 ---
 ### 1.3 Major Components
 
@@ -279,6 +278,8 @@ class MyWidget extends PinPoint.Widget {
 #### Core Features
 - Widget Marketplace - A secure store where users discover and install widgets (like city's main gate)
 - Route Declaration System - Every widget must declare which data and system-level routes it uses (city registration)
+  Data Routes: 🟢 Local, 🟡 Encrypted, 🟠 AI-Enhanced, 🔴 Full
+  System Routes: 🟢 Citizen, 🟡 Observer, 🟠 Interactive, 🔴 Privileged
 - Visual Permission Dashboard - Users see and control each widget's routes and permissions
 - Widget Sandbox Engine - Isolated execution environment for each widget (like separate houses)
 - Native Rendering System - Smooth 60-120 FPS animations using GPU acceleration
@@ -432,34 +433,6 @@ graph TB
 ### 4.3 Component Overview
 
 ```mermaid
-graph TB
-    Users[End Users] --> PinPoint[PinPoint Desktop App]
-    Developers[Widget Developers] --> DevPortal[Developer Portal]
-    Admins[IT Admins] --> AdminPortal[Admin Console]
-    
-    PinPoint --> WidgetStore[Widget Store API]
-    PinPoint --> SyncService[Sync Service]
-    PinPoint --> AuthService[Auth Service]
-    
-    DevPortal --> WidgetStore
-    DevPortal --> Analytics[Analytics Service]
-    
-    AdminPortal --> Enterprise[Enterprise API]
-    AdminPortal --> AuditService[Audit Service]
-    
-    PinPoint -.->|Declared Routes| WeatherAPI[Weather APIs]
-    PinPoint -.->|Declared Routes| StockAPI[Stock APIs]
-    PinPoint -.->|Declared Routes| DevServers[Developer Servers]
-    
-    WidgetStore --> CDN[Widget CDN]
-    SyncService --> CloudStorage[(Encrypted Storage)]
-    
-    style PinPoint fill:#f9f,stroke:#333,stroke-width:4px
-    style Users fill:#9f9,stroke:#333,stroke-width:2px
-    style Developers fill:#9f9,stroke:#333,stroke-width:2px
-```
-
-#### Component Responsibilities
 graph LR
     subgraph "Desktop Client"
         UI[Native UI Layer]
@@ -508,6 +481,27 @@ graph LR
     
     style Core fill:#f96,stroke:#333,stroke-width:2px
     style RouteManager fill:#9cf,stroke:#333,stroke-width:2px
+```
+
+#### Component Responsibilities
+
+| Component | Responsibility |
+|-----------|----------------|
+| PinPoint Core | Main application runtime - manages widget lifecycle, resource allocation, and coordinates all subsystems. The "brain" of the desktop app |
+| Widget Sandboxes | Isolated V8 contexts where widget JavaScript runs. Each widget gets its own sandbox with enforced memory/CPU limits |
+| Native Renderer | GPU-accelerated rendering engine using Metal/DirectX. Composites all widgets at 60-120 FPS for smooth performance |
+| Route Manager | Enforces the "city routes" - ensures widgets only access declared data paths. Blocks unauthorized network/system access |
+| Permission Engine | Manages user consent for widget capabilities. Caches permissions for performance, enforces at runtime |
+| Audit Logger | Records all widget data access and system interactions. Provides transparency and debugging capabilities |
+| Native UI Layer | Platform-specific UI (Win32/Cocoa) for system integration, tray icon, and widget chrome |
+| API Gateway | Single entry point for all backend services. Handles authentication, rate limiting, and request routing |
+| Store Service | Widget marketplace backend - handles browsing, search, downloads, reviews, and developer uploads |
+| Sync Service | Encrypted synchronization of widget data and layouts across user's devices |
+| Auth Service | User authentication and account management. Supports social login and 2FA |
+| Review Service | Automated and manual widget review pipeline. Scans for malware, validates routes, tests performance |
+| Widget Registry DB | Store all widget metadata, versions, developer info, and review status |
+| User Data DB | Encrypted storage for user preferences, widget configurations, and sync data |
+| Audit Logs DB | Tamper-proof storage of all system access logs for compliance and security analysis |
 ---
 ### 4.4 Data Flow for Key Scenarios
 - Installing a Widget:
@@ -598,13 +592,135 @@ graph TB
 
 ### 5.1 Component Architecture
 
-#### Component: <!-- Component Name -->
-- **Purpose**: <!-- Description -->
-- **Interfaces**:
-  - <!-- Interface 1 -->
-- **Dependencies**:
-  - <!-- Dependency 1 -->
+#### Component: 
+- PinPoint Core Component:
+**Purpose**: The central orchestrator that manages everything - like the city's control center.
+**Internal structure**:
+PinPoint Core:
+  ├── Widget Lifecycle Manager
+  │   ├── Widget Loader (installs/starts widgets)
+  │   ├── State Manager (saves/restores widget positions)
+  │   ├── Resource Monitor (tracks CPU/memory usage)
+  │   └── Crash Handler (isolates widget failures)
+  │
+  ├── Event System
+  │   ├── User Input Router (mouse/keyboard to widgets)
+  │   ├── System Event Handler (sleep/wake, display changes)
+  │   └── Widget Communication Bus (if allowed between widgets)
+  │
+  ├── Platform Integration
+  │   ├── OS API Bridge (Windows/macOS specific features)
+  │   ├── System Tray Manager
+  │   └── Notification Service
+  │
+  └── Core Services
+      ├── Update Manager (handles PinPoint and widget updates)
+      ├── Telemetry Service (anonymous usage stats)
+      └── Crash Reporter
+**Interfaces/APIs**:
+// Widget Management API
+interface WidgetManager {
+  installWidget(widgetId: string): Promise<Widget>
+  uninstallWidget(widgetId: string): Promise<void>
+  startWidget(widgetId: string): Promise<void>
+  stopWidget(widgetId: string): Promise<void>
+  getRunningWidgets(): Widget[]
+  setWidgetPosition(widgetId: string, x: number, y: number): void
+}
 
+// Resource Management API
+interface ResourceManager {
+  getWidgetResources(widgetId: string): ResourceUsage
+  setResourceLimit(widgetId: string, limits: ResourceLimits): void
+  suspendWidget(widgetId: string): void
+  resumeWidget(widgetId: string): void
+}
+**Dependencies**:
+Native OS APIs (Win32/Cocoa)
+Widget Sandbox Engine
+Native Renderer
+Route Manager
+#### Widget Sandbox Component: 
+**Purpose**: Secure isolation environment for each widget - like each house in our city
+**Internal Structure**:
+Widget Sandbox:
+  ├── V8 Isolate Instance
+  │   ├── JavaScript Context
+  │   ├── Memory Heap (isolated)
+  │   └── Execution Thread
+  │
+  ├── Security Boundary
+  │   ├── API Filter (only allowed APIs exposed)
+  │   ├── Network Interceptor
+  │   ├── File System Jail
+  │   └── IPC Channel (to Core)
+  │
+  ├── Resource Controls
+  │   ├── CPU Throttler
+  │   ├── Memory Limiter
+  │   ├── Network Rate Limiter
+  │   └── Disk I/O Controller
+  │
+  └── Widget Runtime
+      ├── PinPoint Widget API
+      ├── DOM Emulation (lightweight)
+      ├── Event Handlers
+      └── Lifecycle Hooks
+
+**Interfaces/API**:
+// Exposed to Widgets (inside sandbox)
+interface PinPointWidgetAPI {
+  // Storage
+  storage: {
+    local: {
+      get(key: string): Promise<any>
+      set(key: string, value: any): Promise<void>
+    }
+    sync?: { // Only if sync route declared
+      get(key: string): Promise<any>
+      set(key: string, value: any): Promise<void>
+    }
+  }
+  
+  // Network (filtered by routes)
+  fetch(url: string, options?: RequestInit): Promise<Response>
+  
+  // UI
+  render(element: VirtualElement): void
+  on(event: string, handler: Function): void
+  
+  // System (limited access)
+  system: {
+    getTime(): Date
+    getCPUUsage?(): number // Only if permission granted
+  }
+}
+
+#### Route Manager Component
+**Purpose**: The "traffic control" system that enforces data flow routes
+**Internal structure**:
+Route Manager:
+  ├── Route Registry
+  │   ├── Declared Routes Database
+  │   ├── Route Validation Engine
+  │   └── Route Pattern Matcher
+  │
+  ├── Request Interceptor
+  │   ├── Network Request Filter
+  │   ├── File Access Filter
+  │   ├── System API Filter
+  │   └── IPC Filter
+  │
+  ├── Route Enforcement
+  │   ├── Real-time Validator
+  │   ├── Policy Engine
+  │   ├── Violation Handler
+  │   └── Audit Trail Generator
+  │
+  └── Route Analytics
+      ├── Usage Tracker
+      ├── Performance Monitor
+      └── Anomaly Detector
 ### 5.2 Data Architecture
 
 #### Data Models

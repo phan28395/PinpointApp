@@ -425,9 +425,30 @@ Why not pure monolithic: Widgets need isolation for security. Mixed architecture
 
 ```mermaid
 graph TB
-    User[Users] --> System[System]
-    System --> ExtSystem1[External System 1]
-    System --> ExtSystem2[External System 2]
+    Users[End Users] --> PinPoint[PinPoint Desktop App]
+    Developers[Widget Developers] --> DevPortal[Developer Portal]
+    Admins[IT Admins] --> AdminPortal[Admin Console]
+    
+    PinPoint --> WidgetStore[Widget Store API]
+    PinPoint --> SyncService[Sync Service]
+    PinPoint --> AuthService[Auth Service]
+    
+    DevPortal --> WidgetStore
+    DevPortal --> Analytics[Analytics Service]
+    
+    AdminPortal --> Enterprise[Enterprise API]
+    AdminPortal --> AuditService[Audit Service]
+    
+    PinPoint -.->|Declared Routes| WeatherAPI[Weather APIs]
+    PinPoint -.->|Declared Routes| StockAPI[Stock APIs]
+    PinPoint -.->|Declared Routes| DevServers[Developer Servers]
+    
+    WidgetStore --> CDN[Widget CDN]
+    SyncService --> CloudStorage[(Encrypted Storage)]
+    
+    style PinPoint fill:#f9f,stroke:#333,stroke-width:4px
+    style Users fill:#9f9,stroke:#333,stroke-width:2px
+    style Developers fill:#9f9,stroke:#333,stroke-width:2px
 ```
 
 ### 4.3 Component Overview
@@ -640,6 +661,7 @@ Native OS APIs (Win32/Cocoa)
 Widget Sandbox Engine
 Native Renderer
 Route Manager
+
 #### Widget Sandbox Component: 
 **Purpose**: Secure isolation environment for each widget - like each house in our city
 **Internal Structure**:
@@ -725,106 +747,1524 @@ Route Manager:
 
 #### Data Models
 ```
+# Core Entities
+
 Entity: User
 ├── id: UUID
-├── email: String
+├── email: String (unique)
+├── username: String (unique)
+├── password_hash: String
 ├── created_at: Timestamp
-└── profile: JSON
+├── updated_at: Timestamp
+├── subscription_tier: Enum ['free', 'pro', 'enterprise']
+├── settings: JSON
+│   ├── theme: String
+│   ├── default_routes: Object
+│   └── privacy_mode: String
+└── metadata: JSON
+    ├── last_login: Timestamp
+    ├── device_count: Integer
+    └── total_widgets: Integer
+
+Entity: Widget
+├── id: UUID
+├── name: String
+├── developer_id: UUID (FK -> Developer)
+├── version: String
+├── description: Text
+├── icon_url: String
+├── manifest: JSON
+│   ├── routes: Object
+│   │   ├── data: Array<DataRoute>
+│   │   └── system: Array<SystemRoute>
+│   ├── permissions: Object
+│   └── requirements: Object
+├── status: Enum ['pending', 'approved', 'rejected', 'suspended']
+├── created_at: Timestamp
+├── updated_at: Timestamp
+└── metrics: JSON
+    ├── downloads: Integer
+    ├── rating: Float
+    └── crash_rate: Float
+
+Entity: WidgetInstance
+├── id: UUID
+├── user_id: UUID (FK -> User)
+├── widget_id: UUID (FK -> Widget)
+├── position: JSON {x, y, width, height, display}
+├── settings: JSON (widget-specific settings)
+├── enabled_routes: Array<String>
+├── enabled_functions: Array<String>
+├── created_at: Timestamp
+└── last_active: Timestamp
+
+Entity: Developer
+├── id: UUID
+├── user_id: UUID (FK -> User)
+├── company_name: String
+├── verified: Boolean
+├── revenue_share: Float (default 0.7)
+├── payment_info: Encrypted<JSON>
+├── created_at: Timestamp
+└── metrics: JSON
+    ├── total_widgets: Integer
+    ├── total_downloads: Integer
+    └── revenue_ytd: Decimal
+
+Entity: AuditLog
+├── id: UUID
+├── timestamp: Timestamp
+├── widget_instance_id: UUID (FK -> WidgetInstance)
+├── event_type: Enum ['data_access', 'system_call', 'permission_grant', 'violation']
+├── route_type: String
+├── details: JSON
+│   ├── api_called: String
+│   ├── data_sent: Object
+│   ├── result: String
+│   └── context: Object
+└── ip_address: String
+
+Entity: Review
+├── id: UUID
+├── widget_id: UUID (FK -> Widget)
+├── reviewer_type: Enum ['automated', 'manual']
+├── status: Enum ['pass', 'fail', 'conditional']
+├── findings: JSON
+│   ├── security_issues: Array
+│   ├── performance_issues: Array
+│   ├── route_violations: Array
+│   └── suggestions: Array
+├── created_at: Timestamp
+└── reviewed_by: String
 ```
 
 #### Database Design
-- **Primary Database**: <!-- e.g., PostgreSQL -->
-- **Cache Layer**: <!-- e.g., Redis -->
-- **Search Engine**: <!-- e.g., Elasticsearch -->
+- **Primary Database**: PostgreSQL 14+
+Chosen for: ACID compliance, JSON support, complex queries
+Stores: Users, Widgets, Developer accounts, Audit logs
+Replication: Primary-replica setup for HA
+Partitioning: Audit logs by month
+- **Cache Layer**: Redis 7+
+Chosen for: Sub-millisecond latency, pub/sub support
+Caches:
+
+- User sessions (TTL: 24h)
+- Widget metadata (TTL: 1h)
+- Permission matrices (TTL: 5m)
+- Rate limiting counters
+
+Cluster mode for scalability
+- **Search Engine**: Elasticsearch 8+
+Chosen for: Full-text search, analytics
+Indexes:
+
+- Widget catalog (names, descriptions, tags)
+- Audit logs for compliance search
+- Developer documentation
+- User support tickets
+
+- **Time-Series Database**: TimescaleDB
+
+Chosen for: Performance metrics, usage analytics
+Stores:
+
+- Widget performance metrics (CPU, memory, FPS)
+- User engagement data
+- System health metrics
+- Real-time usage patterns
+- **Object Storage**: S3-compatible (MinIO self-hosted or AWS S3)
+Stores:
+
+- Widget packages (.ppw files)
+- Widget icons and screenshots
+- Crash dumps
+- Backup archives
+#### Data flow architecture
+```mermaid
+graph TD
+    Widget[Widget Instance] --> Cache{Redis Cache}
+    Cache -->|Hit| Widget
+    Cache -->|Miss| DB[(PostgreSQL)]
+    DB --> Cache
+    
+    Widget --> Metrics[Performance Data]
+    Metrics --> TSB[(TimescaleDB)]
+    
+    Widget --> Audit[Audit Events]
+    Audit --> Queue[Message Queue]
+    Queue --> DB
+    Queue --> ES[(Elasticsearch)]
+    
+    Store[Widget Store] --> CDN[CloudFront CDN]
+    CDN --> S3[(S3 Storage)]
+```
+
 
 ### 5.3 Security Architecture
 
 #### Authentication & Authorization
-- **Method**: <!-- e.g., JWT, OAuth -->
-- **Provider**: <!-- e.g., Auth0, Cognito -->
+- **Method**: JWT with Refresh Tokens + OAuth2 for Social Login
+Authentication Flow:
+  1. Primary: Email/Password with JWT
+     - Access Token: 15 minutes
+     - Refresh Token: 30 days
+     - Stored in: Secure HTTP-only cookies
+  
+  2. Social Login: OAuth2
+     - Providers: Google, GitHub, Microsoft
+     - Flow: Authorization Code with PKCE
+  
+  3. 2FA Options:
+     - TOTP (Google Authenticator)
+     - SMS (Twilio)
+     - WebAuthn (Hardware keys)
+- **Provider**: Self-hosted with Keycloak
+Why: Full control, no vendor lock-in, enterprise features
+Alternatives considered: Auth0 (cost), Cognito (AWS lock-in)
 
+- **Authorization Model: RBAC with Route-Based Permissions**
+// Permission Structure
+{
+  "user_id": "uuid",
+  "roles": ["user", "developer"],
+  "widget_permissions": {
+    "widget_instance_id": {
+      "data_routes": ["local-only", "encrypted-sync"],
+      "system_routes": ["citizen", "observer"],
+      "functions": ["basic_features", "sync"],
+      "restrictions": {
+        "rate_limits": {"api_calls": 100},
+        "time_windows": ["business_hours"]
+      }
+    }
+  }
+}
 #### Data Protection
-- **Encryption at Rest**: <!-- Method -->
-- **Encryption in Transit**: <!-- Method -->
+ **Encryption at Rest**:
+Method: AES-256-GCM
+Key Management: AWS KMS or HashiCorp Vault
+Implementation:
+´´´
+Application Level:
+  - User payment info: Field-level encryption
+  - Developer credentials: Encrypted JSON fields
+  - Sensitive widget data: Encrypted before storage
+
+Database Level:
+  - PostgreSQL: Transparent Data Encryption (TDE)
+  - Redis: Encryption via Redis Enterprise
+  - S3: SSE-S3 with customer keys
+
+Backup Encryption:
+  - All backups encrypted with separate keys
+  - Key rotation every 90 days
+´´´
+
+- **Encryption in Transit**: 
+Method: TLS 1.3 minimum
+Certificate: Let's Encrypt with auto-renewal
+Implementation:
+´´´
+External Communication:
+  - All APIs: HTTPS only
+  - WebSocket: WSS with TLS
+  - Widget downloads: HTTPS with integrity check
+
+Internal Communication:
+  - Service mesh: mTLS (Istio)
+  - Database connections: SSL required
+  - Cache connections: TLS with auth
+
+Widget-to-Server:
+  - Certificate pinning for critical APIs
+  - Route-specific encryption levels:
+    - Local-only: No network
+    - Encrypted-sync: E2E encryption
+    - AI-enhanced: TLS + app-level encryption
+    - Full-featured: TLS minimum
+´´´
+
+#### Additional Security Measures
+- **Widget Code Security:**
+Code Signing:
+  - All widgets signed with developer certificate
+  - Signature verified before execution
+  - Certificate chain validation
+  - Revocation checking (OCSP)
+
+Sandboxing:
+  - V8 isolates with restricted APIs
+  - Capability-based security
+  - Resource quotas enforced
+  - No direct system calls
+
+- **API Security:**
+Rate Limiting:
+  - Per user: 1000 requests/hour
+  - Per widget: 100 requests/hour
+  - Per developer: 10000 requests/hour
+  - DDoS protection via CloudFlare
+
+API Gateway Security:
+  - Input validation on all endpoints
+  - SQL injection prevention
+  - XSS protection
+  - CORS properly configured
+
+- **Compliance & Auditing:**
+Compliance:
+  - GDPR: Right to deletion, data portability
+  - CCPA: Privacy notices, opt-out
+  - SOC2: Annual audits
+  - HIPAA: Available for healthcare widgets
+
+Audit Requirements:
+  - All data access logged
+  - Logs retained for 1 year
+  - Real-time alerting for violations
+  - Monthly compliance reports
+
+- **Security Response Plan:**
+Incident Response:
+  - 24/7 security monitoring
+  - 1-hour response time for critical issues
+  - Remote widget disable capability
+  - Automatic security patches
+  
+Vulnerability Management:
+  - Bug bounty program
+  - Regular penetration testing
+  - Dependency scanning (Snyk)
+  - Security advisories published
+
+
 
 ### 5.4 Integration Architecture
 
 #### API Design
-- **Style**: <!-- REST, GraphQL, gRPC -->
-- **Versioning Strategy**: <!-- e.g., URL path, headers -->
-
+- **Style**: REST with GraphQL for Complex Queries
+API Architecture:
+  Public APIs:
+    - REST: Simple CRUD operations, widget downloads
+    - GraphQL: Widget discovery, complex searches, analytics
+    - WebSocket: Real-time updates, live sync
+  
+  Internal APIs:
+    - gRPC: Service-to-service communication
+    - Message Queue: Async operations (RabbitMQ)
+- **Versioning Strategy**: URL Path Versioning with Sunset Policy
+Versioning:
+  Format: /api/v{major}/resource
+  Examples:
+    - /api/v1/widgets
+    - /api/v2/widgets (with breaking changes)
+  
+  Sunset Policy:
+    - New version announcement: 6 months notice
+    - Deprecation warnings: 3 months before
+    - End of life: 12 months after new version
+    - Legacy support: Critical security only
 #### Message Formats
+- **Widget Manifest Format:**
 ```json
 {
-  "version": "1.0",
-  "type": "event_type",
-  "data": {}
+  "version": "2.0",
+  "widget": {
+    "id": "com.example.weather",
+    "name": "Weather Plus",
+    "version": "1.2.3",
+    "developer": {
+      "id": "dev_123",
+      "name": "Example Inc",
+      "verified": true
+    }
+  },
+  "routes": {
+    "data": [
+      {
+        "id": "weather-api",
+        "type": "public-api",
+        "endpoints": ["api.weather.com"],
+        "rateLimit": "60/hour",
+        "cacheDuration": "5min"
+      }
+    ],
+    "system": [
+      {
+        "id": "location",
+        "type": "observer",
+        "apis": ["geolocation"],
+        "precision": "city",
+        "refreshRate": "on-demand"
+      }
+    ]
+  },
+  "requirements": {
+    "minPinPointVersion": "2.0.0",
+    "platforms": ["windows", "macos"],
+    "gpu": "optional"
+  }
+}
+```
+- **API Response Format:**
+{
+  "status": "success",
+  "data": {
+    "widgets": [
+      {
+        "id": "widget_123",
+        "name": "Weather Plus",
+        "rating": 4.8,
+        "downloads": 50000
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 485
+    }
+  },
+  "metadata": {
+    "requestId": "req_abc123",
+    "timestamp": "2024-01-20T10:30:00Z",
+    "version": "v1"
+  }
+}
+
+- **Error Format:**
+{
+  "status": "error",
+  "error": {
+    "code": "ROUTE_VIOLATION",
+    "message": "Widget attempted to access undeclared route",
+    "details": {
+      "widgetId": "widget_123",
+      "attemptedRoute": "api.facebook.com",
+      "allowedRoutes": ["api.weather.com"]
+    }
+  },
+  "metadata": {
+    "requestId": "req_xyz789",
+    "timestamp": "2024-01-20T10:30:00Z",
+    "documentation": "https://docs.pinpoint.app/errors/ROUTE_VIOLATION"
+  }
+}
+#### Integration Patterns
+- **Widget-to-Platform Communication:**
+// Widget SDK provides standardized interface
+class PinPointSDK {
+  // Route-aware fetch
+  async fetch(url, options = {}) {
+    // Validate against declared routes
+    const route = this.validateRoute(url);
+    if (!route) {
+      throw new RouteViolationError(url);
+    }
+    
+    // Add route metadata
+    const headers = {
+      ...options.headers,
+      'X-PinPoint-Widget': this.widgetId,
+      'X-PinPoint-Route': route.id,
+      'X-PinPoint-Route-Type': route.type
+    };
+    
+    // Execute with monitoring
+    const response = await this.monitoredFetch(url, {
+      ...options,
+      headers
+    });
+    
+    // Log for audit
+    this.auditLog('data_access', {
+      url,
+      route: route.id,
+      status: response.status
+    });
+    
+    return response;
+  }
+  
+  // System API access
+  async system(api, params = {}) {
+    // Check system route permissions
+    const permission = await this.checkSystemPermission(api);
+    if (!permission.granted) {
+      throw new PermissionDeniedError(api);
+    }
+    
+    // Rate limiting
+    if (!this.rateLimiter.check(api)) {
+      throw new RateLimitError(api);
+    }
+    
+    // Execute system call
+    return await this.bridge.callSystem(api, params);
+  }
+}
+
+- **Platform Event System:**
+// Event types widgets can subscribe to
+const PinPointEvents = {
+  // System events
+  'system.theme.changed': {
+    data: { theme: 'dark' | 'light' }
+  },
+  'system.display.changed': {
+    data: { displays: Array<Display> }
+  },
+  
+  // Widget lifecycle
+  'widget.settings.updated': {
+    data: { settings: Object }
+  },
+  'widget.route.granted': {
+    data: { route: Route }
+  },
+  
+  // User events
+  'user.focus.changed': {
+    data: { hasFocus: boolean }
+  }
+};
+
+// Widget subscription
+widget.on('system.theme.changed', (event) => {
+  this.updateTheme(event.data.theme);
+});
+
+#### External Service Integration:
+- **Weather API Integration Example:**
+// Platform proxy for external APIs
+class ExternalAPIProxy {
+  async proxyRequest(widgetId, route, request) {
+    // Validate widget has permission
+    if (!this.hasRoutePermission(widgetId, route)) {
+      throw new UnauthorizedError();
+    }
+    
+    // Apply rate limiting
+    await this.rateLimiter.consume(widgetId, route);
+    
+    // Transform request
+    const proxiedRequest = {
+      ...request,
+      headers: {
+        ...request.headers,
+        // Remove sensitive headers
+        'X-PinPoint-Widget': undefined,
+        // Add API key if platform manages it
+        'X-API-Key': this.getAPIKey(route)
+      }
+    };
+    
+    // Make request
+    const response = await fetch(route.endpoint, proxiedRequest);
+    
+    // Cache if configured
+    if (route.cacheDuration) {
+      await this.cache.set(
+        this.getCacheKey(widgetId, request),
+        response,
+        route.cacheDuration
+      );
+    }
+    
+    // Return sanitized response
+    return this.sanitizeResponse(response);
+  }
+}
+
+#### Developer API Integration
+ - **Widget Submission API:**
+ // REST API for widget submission
+POST /api/v1/developer/widgets
+{
+  "manifest": { /* widget manifest */ },
+  "package": "base64_encoded_widget_package",
+  "changelog": "Fixed weather API integration",
+  "targetVersion": "2.0.0"
+}
+
+// Response
+{
+  "status": "success",
+  "data": {
+    "submissionId": "sub_123",
+    "status": "pending_review",
+    "estimatedReviewTime": "24-48 hours",
+    "trackingUrl": "https://dev.pinpoint.app/submissions/sub_123"
+  }
+}
+
+// GraphQL for complex developer queries
+query DeveloperDashboard($developerId: ID!) {
+  developer(id: $developerId) {
+    widgets {
+      id
+      name
+      version
+      status
+      metrics {
+        downloads(period: LAST_30_DAYS)
+        revenue(period: LAST_30_DAYS)
+        rating
+        crashRate
+      }
+      reviews(limit: 5) {
+        rating
+        comment
+        createdAt
+      }
+    }
+    earnings {
+      total
+      pending
+      lastPayout
+    }
+  }
+}
+
+#### Enterprise Integration:
+- **SSO Integration:**
+SAML 2.0 Support:
+  - Identity Providers: Okta, AD FS, Ping
+  - Metadata Exchange: Automated
+  - Attributes Mapping: Customizable
+  
+OIDC Support:
+  - Providers: Any OIDC-compliant
+  - Scopes: profile, email, groups
+  - Claims: Mapped to PinPoint roles
+
+- **Enterprise API:**
+// Bulk widget deployment
+POST /api/v1/enterprise/deployments
+{
+  "organizationId": "org_123",
+  "widgets": [
+    {
+      "widgetId": "widget_456",
+      "targetUsers": ["group:developers", "user:john@company.com"],
+      "configuration": {
+        "routes": {
+          "data": ["local-only"], // Restrict to local only
+          "system": ["citizen"]    // Minimal system access
+        },
+        "settings": {
+          "companyServer": "https://internal.company.com"
+        }
+      }
+    }
+  ],
+  "policy": {
+    "mandatory": true,
+    "allowUserDisable": false
+  }
+}
+
+#### Webhook System:
+
+- **Platform Webhooks:**
+// Webhook configuration
+POST /api/v1/developer/webhooks
+{
+  "url": "https://api.example.com/pinpoint-webhook",
+  "events": [
+    "widget.installed",
+    "widget.uninstalled",
+    "widget.crashed",
+    "review.completed"
+  ],
+  "secret": "webhook_secret_key"
+}
+
+// Webhook payload
+{
+  "event": "widget.installed",
+  "timestamp": "2024-01-20T10:30:00Z",
+  "data": {
+    "widgetId": "widget_123",
+    "userId": "user_456",
+    "version": "1.2.3",
+    "platform": "windows"
+  },
+  "signature": "sha256=..." // HMAC signature
+}
+
+#### Migration & Compatibility:
+- **Widget Migration API:**
+// For migrating from v1 to v2 widgets
+class WidgetMigrator {
+  async migrate(v1Widget) {
+    return {
+      // Map old format to new
+      manifest: {
+        version: "2.0",
+        widget: this.mapWidgetInfo(v1Widget),
+        routes: this.inferRoutes(v1Widget),
+        requirements: this.mapRequirements(v1Widget)
+      },
+      // Provide compatibility layer
+      compatibilityMode: true,
+      warnings: this.getMigrationWarnings(v1Widget)
+    };
+  }
+}
+---
+
+# 6. Technology Stack
+
+## 6.1 Platform Choices
+
+| Layer | Technology | Justification |
+|-------|------------|---------------|
+| **Operating Systems** | Windows 10/11, macOS 12+, Ubuntu 22.04+ | Cover 95%+ of desktop users, native performance on each |
+| **Cloud Provider** | AWS (primary), Azure (backup) | AWS for scale and services, Azure for enterprise customers |
+| **Container Platform** | Docker + Kubernetes (EKS) | Industry standard, excellent orchestration, easy scaling |
+| **CI/CD** | GitHub Actions + ArgoCD | GitOps workflow, automated deployments, infrastructure as code |
+| **Monitoring** | Datadog + Prometheus/Grafana | Comprehensive monitoring, custom metrics for widgets |
+
+## 6.2 Development Stack
+
+### Frontend (Desktop Application)
+
+**PinPoint Core Application**
+- **Language**: TypeScript 5.0+
+- **Framework**: Electron 28+ with native modules
+- **UI Framework**: React 18+ for chrome UI
+- **State Management**: Zustand (lightweight for desktop)
+- **Build Tool**: Vite (fast builds, better DX than Webpack)
+- **Native Bindings**: Node-API for performance-critical parts
+
+```yaml
+Key Libraries:
+  Rendering:
+    - WebGL2 for GPU acceleration
+    - Skia-based canvas for 2D graphics
+    - Three.js for 3D widgets (optional)
+  
+  IPC:
+    - Custom IPC layer for widget communication
+    - MessagePort API for secure channels
+  
+  Testing:
+    - Vitest for unit tests
+    - Playwright for E2E tests
+    - Storybook for component library
+```
+
+**Widget SDK (What developers use)**
+- **Language**: TypeScript/JavaScript
+- **Framework**: Vanilla JS with optional React/Vue support
+- **Build Tool**: Rollup (smaller bundles for widgets)
+- **Type Definitions**: Comprehensive .d.ts files
+- **Dev Tools**: Custom Chrome DevTools extension
+
+```javascript
+// Example widget development experience
+import { Widget, Route } from '@pinpoint/sdk';
+
+@Widget({
+  name: 'Weather Plus',
+  routes: {
+    data: [Route.PublicAPI],
+    system: [Route.Citizen]
+  }
+})
+export class WeatherWidget extends BaseWidget {
+  async render() {
+    const weather = await this.fetch('api.weather.com');
+    return this.html`
+      <div class="weather">
+        <h2>${weather.temp}°</h2>
+        <p>${weather.condition}</p>
+      </div>
+    `;
+  }
 }
 ```
 
----
+### Backend Services
 
-## 6. Technology Stack
+**Core Platform Services**
+- **Language**: Go 1.21+
+- **Why Go**: Performance, concurrency, small memory footprint
+- **Framework**: Gin (HTTP) + gRPC (internal services)
+- **Database Driver**: pgx (PostgreSQL)
+- **Validation**: go-playground/validator
 
-### 6.1 Platform Choices
-| Layer | Technology | Justification |
-|-------|------------|---------------|
-| Operating System | <!-- e.g., Linux --> | <!-- Reason --> |
-| Cloud Provider | <!-- e.g., AWS --> | <!-- Reason --> |
-| Container Platform | <!-- e.g., Docker --> | <!-- Reason --> |
-
-### 6.2 Development Stack
-- **Frontend**
-  - Language: <!-- e.g., TypeScript -->
-  - Framework: <!-- e.g., React -->
-  - Build Tool: <!-- e.g., Webpack -->
+```yaml
+Service Architecture:
+  API Gateway:
+    - Framework: Gin + go-chi router
+    - Rate Limiting: go-redis/redis_rate
+    - Auth: JWT with refresh tokens
   
-- **Backend**
-  - Language: <!-- e.g., Python -->
-  - Framework: <!-- e.g., FastAPI -->
-  - ORM: <!-- e.g., SQLAlchemy -->
+  Widget Store Service:
+    - Search: Elasticsearch Go client
+    - Storage: AWS SDK for S3
+    - Queue: RabbitMQ with amqp091-go
+  
+  Review Service:
+    - Sandboxing: gVisor integration
+    - Static Analysis: Custom Go AST parser
+    - Performance Testing: pprof integration
+```
 
-### 6.3 Infrastructure
-- **Compute**: <!-- e.g., EC2, Lambda -->
-- **Storage**: <!-- e.g., S3, EBS -->
-- **Network**: <!-- e.g., VPC, CloudFront -->
-- **Monitoring**: <!-- e.g., DataDog, CloudWatch -->
+**Real-time Services**
+- **Language**: Node.js 20 LTS with TypeScript
+- **Framework**: Socket.io for WebSocket
+- **Message Broker**: Redis Pub/Sub
+- **Why Node**: Excellent for real-time, huge ecosystem
 
----
+**Analytics Pipeline**
+- **Language**: Python 3.11+
+- **Framework**: FastAPI for REST endpoints
+- **Data Processing**: Apache Spark with PySpark
+- **ML Framework**: scikit-learn for anomaly detection
+- **Time Series**: pandas + TimescaleDB connector
+
+### Widget Runtime
+
+**V8 Isolate Management**
+- **Language**: C++ with V8 embedding
+- **Bindings**: Node-API for JS interface
+- **Memory Management**: Custom allocator with limits
+- **Security**: Capability-based API restrictions
+
+```cpp
+// Simplified widget isolate creation
+class WidgetIsolate {
+  v8::Isolate* isolate;
+  v8::Persistent<v8::Context> context;
+  
+public:
+  WidgetIsolate(const WidgetManifest& manifest) {
+    // Create isolate with resource constraints
+    v8::ResourceConstraints constraints;
+    constraints.set_max_memory(manifest.memoryLimit);
+    
+    v8::Isolate::CreateParams params;
+    params.constraints = constraints;
+    isolate = v8::Isolate::New(params);
+    
+    // Create secure context with filtered APIs
+    context = CreateSecureContext(manifest.routes);
+  }
+};
+```
+
+**Native Renderer**
+- **Graphics API**: 
+  - Windows: Direct3D 12
+  - macOS: Metal
+  - Linux: Vulkan
+- **Abstraction**: Custom layer similar to ANGLE
+- **Compositing**: Inspired by Chromium's cc/
+
+## 6.3 Infrastructure
+
+### Compute
+- **Container Hosting**: Amazon EKS (Kubernetes)
+- **Serverless**: AWS Lambda for webhook processing
+- **Edge Computing**: CloudFront Functions for routing
+- **Batch Processing**: AWS Batch for review pipeline
+
+### Storage
+- **Primary Database**: Amazon RDS (PostgreSQL 14)
+- **Cache**: Amazon ElastiCache (Redis 7)
+- **Object Storage**: Amazon S3 with CloudFront CDN
+- **Time Series**: TimescaleDB on EC2
+- **Search**: Amazon OpenSearch Service
+
+### Network
+- **Load Balancer**: AWS ALB with WAF
+- **API Gateway**: Kong Gateway on EKS
+- **Service Mesh**: Istio for internal services
+- **VPN**: WireGuard for admin access
+
+### Security Infrastructure
+- **Secrets Management**: HashiCorp Vault
+- **Certificate Management**: Let's Encrypt + cert-manager
+- **SIEM**: Splunk Cloud
+- **Vulnerability Scanning**: Snyk + Trivy
+
+### Monitoring & Observability
+```yaml
+Metrics:
+  - Prometheus for metrics collection
+  - Grafana for visualization
+  - Custom dashboards per service
+
+Logs:
+  - Fluentd for log aggregation
+  - Elasticsearch for log storage
+  - Kibana for log analysis
+
+Traces:
+  - OpenTelemetry instrumentation
+  - Jaeger for distributed tracing
+  - Service dependency mapping
+
+Alerts:
+  - PagerDuty integration
+  - Slack notifications
+  - Custom escalation policies
+```
+
+## 6.4 Development Tools
+
+### Local Development
+```yaml
+Required Tools:
+  - Docker Desktop for services
+  - Node.js 20 LTS
+  - Go 1.21+
+  - Python 3.11+
+  - Rust (for native modules)
+
+Development Environment:
+  - VS Code with PinPoint extension
+  - Local K8s with Kind
+  - LocalStack for AWS services
+  - Tilt for hot reloading
+```
+
+### Widget Development Kit
+```yaml
+CLI Tool:
+  - Name: pinpoint-cli
+  - Language: Go (single binary)
+  - Features:
+    - Widget scaffolding
+    - Local testing environment
+    - Performance profiling
+    - Submission to store
+
+Widget Simulator:
+  - Electron app for testing
+  - Simulates all routes
+  - Performance monitoring
+  - Debug tools integration
+```
+
+### Testing Infrastructure
+```yaml
+Unit Testing:
+  - Frontend: Vitest + React Testing Library
+  - Backend Go: Native testing + testify
+  - Backend Node: Jest
+  - Widget SDK: Vitest
+
+Integration Testing:
+  - API Tests: Postman/Newman
+  - Service Tests: Docker Compose
+  - Contract Tests: Pact
+
+E2E Testing:
+  - Desktop App: Playwright
+  - Widget Tests: Custom framework
+  - Performance: K6 for load testing
+
+Security Testing:
+  - SAST: SonarQube
+  - DAST: OWASP ZAP
+  - Dependency: Snyk
+  - Container: Trivy
+```
+
+## 6.5 Platform-Specific Considerations
+
+### Windows
+```yaml
+Build Tools:
+  - Visual Studio 2022 Build Tools
+  - Windows SDK 10.0.22621.0
+  - WiX Toolset for installer
+
+Native Modules:
+  - Direct3D 12 for rendering
+  - Windows Runtime APIs
+  - Credential Manager API
+```
+
+### macOS
+```yaml
+Build Tools:
+  - Xcode 15+
+  - macOS SDK 14.0
+  - Notarization tooling
+
+Native Modules:
+  - Metal for rendering
+  - Core Animation
+  - Keychain Services API
+```
+
+### Linux
+```yaml
+Build Tools:
+  - GCC 11+ or Clang 15+
+  - AppImage tools
+  - Snapcraft (optional)
+
+Native Modules:
+  - Vulkan for rendering
+  - libsecret for credentials
+  - D-Bus for system integration
+```
+
+## 6.6 Version Management
+
+```yaml
+Versioning Strategy:
+  PinPoint Core: Semantic Versioning (2.1.0)
+  Widget SDK: Locked to Core major version
+  APIs: URL versioning (/v1/, /v2/)
+  Widgets: Developer controlled
+
+Compatibility Matrix:
+  Core 2.x supports SDK 2.x
+  Widgets declare min version
+  Graceful degradation for features
+  
+Update Channels:
+  Stable: Monthly releases
+  Beta: Weekly releases
+  Canary: Daily builds
+  Enterprise: Quarterly with LTS
+```
 
 ## 7. Cross-Cutting Concerns
 
-### 7.1 Logging & Monitoring
-- **Log Aggregation**: <!-- Tool -->
-- **Metrics Collection**: <!-- Tool -->
-- **Alerting**: <!-- Tool -->
+# 7. Cross-Cutting Concerns
 
-### 7.2 Error Handling
-```python
-# Error handling pattern example
-try:
-    # Business logic
-except SpecificError as e:
-    # Handle specific error
-except Exception as e:
-    # Log and handle generic error
+## 7.1 Logging & Monitoring
+
+### Logging Strategy
+
+**Log Aggregation**: **Fluentd + Elasticsearch + Kibana (EFK Stack)**
+
+```yaml
+Log Levels:
+  ERROR: System errors, exceptions, failures
+  WARN: Performance issues, deprecated APIs, recoverable errors
+  INFO: Widget lifecycle, user actions, API calls
+  DEBUG: Detailed execution flow (dev only)
+  TRACE: Full data dumps (never in production)
+
+Log Structure:
+  {
+    "timestamp": "2024-01-20T10:30:00.123Z",
+    "level": "INFO",
+    "service": "widget-sandbox",
+    "widgetId": "widget_123",
+    "userId": "user_456",
+    "sessionId": "session_789",
+    "event": "widget.started",
+    "metadata": {
+      "version": "1.2.3",
+      "route": "local-only",
+      "platform": "windows"
+    },
+    "duration": 45,
+    "traceId": "abc-123-def"
+  }
 ```
 
-### 7.3 Caching Strategy
-| Cache Level | Technology | TTL |
-|-------------|------------|-----|
-| CDN | <!-- e.g., CloudFront --> | 24h |
-| Application | <!-- e.g., Redis --> | 1h |
-| Database | <!-- e.g., Query Cache --> | 5m |
+**Widget-Specific Logging**:
+```javascript
+// Widget developers get filtered logs
+class WidgetLogger {
+  log(level, message, data) {
+    // Sanitize sensitive data
+    const sanitized = this.sanitize(data);
+    
+    // Route to appropriate destination
+    if (this.widget.route === 'local-only') {
+      // Store locally only
+      this.localStore.append(level, message, sanitized);
+    } else {
+      // Can send to developer's server
+      this.remoteLogger.send(level, message, sanitized);
+    }
+    
+    // Always audit log for security
+    this.auditLogger.record({
+      widget: this.widgetId,
+      level,
+      message,
+      timestamp: Date.now()
+    });
+  }
+}
+```
 
-### 7.4 Configuration Management
-- **Tool**: <!-- e.g., Consul, AWS Parameter Store -->
-- **Environment Variables**: <!-- Strategy -->
+### Metrics Collection
 
-### 7.5 Deployment Strategy
-- **Method**: <!-- e.g., Blue-Green, Canary -->
-- **Rollback Plan**: <!-- Description -->
+**System Metrics**: **Prometheus + Grafana**
 
+```yaml
+Widget Performance Metrics:
+  - widget_cpu_usage_percent{widgetId, userId}
+  - widget_memory_usage_bytes{widgetId, userId}
+  - widget_render_time_ms{widgetId, operation}
+  - widget_api_latency_ms{widgetId, endpoint}
+  - widget_crash_total{widgetId, reason}
+
+Platform Metrics:
+  - pinpoint_active_users_total
+  - pinpoint_widgets_running_total
+  - pinpoint_store_downloads_total{widgetId}
+  - pinpoint_api_requests_total{endpoint, status}
+  - pinpoint_review_queue_size
+
+Business Metrics:
+  - revenue_total{type="subscription|purchase"}
+  - developer_payout_total{developerId}
+  - user_retention_rate{cohort}
+  - widget_rating_average{widgetId}
+```
+
+### Alerting Rules
+
+```yaml
+Critical Alerts (Page immediately):
+  - Widget crash rate > 5% for popular widget (>10k users)
+  - Platform API error rate > 1%
+  - Payment processing failures > 10 in 5 minutes
+  - Security violation detected (malware/data breach)
+  - Core service down > 30 seconds
+
+Warning Alerts (Notify team):
+  - Widget memory usage > 80% of limit
+  - API latency p95 > 1 second
+  - Disk usage > 80%
+  - Review queue > 100 widgets
+  - Certificate expiry < 30 days
+
+Info Alerts (Dashboard only):
+  - New widget submitted for review
+  - Daily active users milestone reached
+  - Successful deployment completed
+```
+
+## 7.2 Error Handling
+
+### Error Handling Patterns
+
+**Global Error Handler**:
+```typescript
+// Centralized error handling
+class PinPointError extends Error {
+  constructor(
+    public code: string,
+    public message: string,
+    public details?: any,
+    public recoverable: boolean = true
+  ) {
+    super(message);
+  }
+}
+
+class ErrorHandler {
+  async handle(error: Error, context: ErrorContext) {
+    // Classify error
+    const classification = this.classify(error);
+    
+    // Log appropriately
+    this.logger.log(classification.severity, error, context);
+    
+    // Take action based on type
+    switch (classification.type) {
+      case 'WIDGET_CRASH':
+        await this.handleWidgetCrash(error, context);
+        break;
+        
+      case 'ROUTE_VIOLATION':
+        await this.handleSecurityViolation(error, context);
+        break;
+        
+      case 'RESOURCE_EXHAUSTED':
+        await this.handleResourceExhaustion(error, context);
+        break;
+        
+      default:
+        await this.handleGenericError(error, context);
+    }
+    
+    // Notify user if needed
+    if (classification.userVisible) {
+      this.notifyUser(classification.userMessage);
+    }
+  }
+  
+  async handleWidgetCrash(error: Error, context: ErrorContext) {
+    // Isolate the widget
+    await this.widgetManager.isolate(context.widgetId);
+    
+    // Attempt recovery
+    if (context.crashCount < 3) {
+      setTimeout(() => {
+        this.widgetManager.restart(context.widgetId);
+      }, 1000 * Math.pow(2, context.crashCount)); // Exponential backoff
+    } else {
+      // Disable widget after 3 crashes
+      await this.widgetManager.disable(context.widgetId);
+      this.notifyUser(`Widget ${context.widgetName} has been disabled due to repeated crashes`);
+    }
+    
+    // Report to developer
+    await this.crashReporter.send(context.widgetId, error);
+  }
+}
+```
+
+**Widget Error Boundaries**:
+```javascript
+// Prevent widget errors from affecting platform
+class WidgetErrorBoundary {
+  constructor(widgetId) {
+    this.widgetId = widgetId;
+    this.errorCount = 0;
+  }
+  
+  async execute(fn) {
+    try {
+      return await fn();
+    } catch (error) {
+      this.errorCount++;
+      
+      // Log widget error
+      logger.error('Widget execution error', {
+        widgetId: this.widgetId,
+        error: error.message,
+        stack: error.stack,
+        errorCount: this.errorCount
+      });
+      
+      // Determine if recoverable
+      if (this.isRecoverable(error)) {
+        // Return safe default
+        return this.getSafeDefault(fn.name);
+      } else {
+        // Propagate to platform handler
+        throw new WidgetError(this.widgetId, error);
+      }
+    }
+  }
+  
+  isRecoverable(error) {
+    // Network errors are often recoverable
+    if (error.code === 'NETWORK_ERROR') return true;
+    
+    // Memory errors might recover after GC
+    if (error.code === 'MEMORY_PRESSURE') return true;
+    
+    // Security violations are not recoverable
+    if (error.code === 'SECURITY_VIOLATION') return false;
+    
+    // Default to recoverable
+    return true;
+  }
+}
+```
+
+## 7.3 Caching Strategy
+
+### Cache Levels and Implementation
+
+| Cache Level | Technology | TTL | Use Case |
+|-------------|------------|-----|----------|
+| **CDN** | CloudFront | 7 days | Widget packages, assets |
+| **API Gateway** | Varnish | 5 minutes | Public API responses |
+| **Application** | Redis | 1 hour | User sessions, permissions |
+| **Widget Runtime** | In-memory LRU | 10 minutes | API responses, computed data |
+| **Database** | PostgreSQL | 5 minutes | Query result cache |
+
+**Widget Cache Management**:
+```javascript
+class WidgetCacheManager {
+  constructor(widgetId, memoryLimit) {
+    this.widgetId = widgetId;
+    this.cache = new LRUCache({
+      max: memoryLimit,
+      ttl: 1000 * 60 * 10, // 10 minutes
+      updateAgeOnGet: true
+    });
+  }
+  
+  async get(key, factory) {
+    // Check cache first
+    const cached = this.cache.get(key);
+    if (cached) {
+      this.metrics.cacheHit(this.widgetId, key);
+      return cached;
+    }
+    
+    // Cache miss - fetch data
+    this.metrics.cacheMiss(this.widgetId, key);
+    const data = await factory();
+    
+    // Store in cache if allowed by route
+    if (this.canCache(key)) {
+      this.cache.set(key, data);
+    }
+    
+    return data;
+  }
+  
+  canCache(key) {
+    // Local-only data always cacheable
+    if (this.route === 'local-only') return true;
+    
+    // Check if data contains personal info
+    if (this.containsPersonalData(key)) return false;
+    
+    // Respect cache headers
+    return this.respectsCachePolicy(key);
+  }
+}
+```
+
+**Platform Cache Warming**:
+```yaml
+Cache Warming Strategy:
+  On Deploy:
+    - Preload popular widget metadata
+    - Cache permission matrices
+    - Warm CDN with widget packages
+  
+  Scheduled:
+    - Every hour: Refresh trending widgets
+    - Every 6 hours: Update developer stats
+    - Daily: Rebuild search indices
+  
+  On Demand:
+    - User login: Load user preferences
+    - Widget install: Cache dependencies
+```
+
+## 7.4 Configuration Management
+
+**Configuration Store**: **AWS Systems Manager Parameter Store + HashiCorp Consul**
+
+```yaml
+Configuration Hierarchy:
+  Global:
+    - Feature flags
+    - API endpoints
+    - Rate limits
+    
+  Environment:
+    - Database connections
+    - Service URLs
+    - Debug settings
+    
+  Widget Defaults:
+    - Memory limits
+    - CPU quotas
+    - Permission defaults
+    
+  User Overrides:
+    - Theme preferences
+    - Privacy settings
+    - Widget layouts
+```
+
+**Configuration Loading**:
+```javascript
+class ConfigManager {
+  constructor() {
+    this.sources = [
+      new EnvironmentConfigSource(),
+      new ParameterStoreSource(),
+      new ConsulConfigSource(),
+      new LocalFileSource('/etc/pinpoint/config.json')
+    ];
+  }
+  
+  async load() {
+    const config = {};
+    
+    // Load from sources in priority order
+    for (const source of this.sources) {
+      const sourceConfig = await source.load();
+      Object.assign(config, sourceConfig);
+    }
+    
+    // Validate configuration
+    this.validate(config);
+    
+    // Watch for changes
+    this.watchForChanges();
+    
+    return config;
+  }
+  
+  watchForChanges() {
+    // Real-time config updates
+    this.consul.watch('pinpoint/', (key, value) => {
+      // Hot reload configuration
+      this.updateConfig(key, value);
+      
+      // Notify affected services
+      this.eventBus.emit('config.changed', { key, value });
+    });
+  }
+}
+```
+
+**Environment Variables**:
+```bash
+# Core settings
+PINPOINT_ENV=production
+PINPOINT_LOG_LEVEL=info
+PINPOINT_API_URL=https://api.pinpoint.app
+
+# Security
+PINPOINT_JWT_SECRET_PARAM=/pinpoint/prod/jwt-secret
+PINPOINT_ENCRYPTION_KEY_PARAM=/pinpoint/prod/encryption-key
+
+# Database
+PINPOINT_DB_HOST_PARAM=/pinpoint/prod/db-host
+PINPOINT_DB_POOL_SIZE=20
+
+# Feature flags
+PINPOINT_FEATURE_AI_WIDGETS=true
+PINPOINT_FEATURE_ENTERPRISE_SSO=false
+
+# Widget defaults
+PINPOINT_WIDGET_MAX_MEMORY_MB=100
+PINPOINT_WIDGET_MAX_CPU_PERCENT=25
+```
+
+## 7.5 Deployment Strategy
+
+### Deployment Method: **Blue-Green with Canary Testing**
+
+```yaml
+Deployment Pipeline:
+  1. Build & Test:
+     - Run all tests
+     - Security scanning
+     - Build artifacts
+     
+  2. Canary Deploy (5%):
+     - Deploy to canary environment
+     - Route 5% of traffic
+     - Monitor for 1 hour
+     - Automatic rollback on errors
+     
+  3. Blue Environment:
+     - Deploy new version to blue
+     - Run smoke tests
+     - Warm caches
+     
+  4. Traffic Switch:
+     - Gradually shift traffic (25% -> 50% -> 100%)
+     - Monitor metrics at each stage
+     - Keep green environment ready
+     
+  5. Finalize:
+     - After 24 hours stable
+     - Green becomes new blue
+     - Old blue terminated
+```
+
+**Widget Deployment**:
+```javascript
+class WidgetDeploymentManager {
+  async deployWidget(widgetId, version) {
+    // Create deployment strategy
+    const strategy = this.getDeploymentStrategy(widgetId);
+    
+    if (strategy === 'canary') {
+      // Deploy to small percentage first
+      await this.canaryDeploy(widgetId, version, {
+        percentage: 5,
+        duration: '1h',
+        metrics: ['crash_rate', 'performance']
+      });
+    }
+    
+    // Progressive rollout
+    for (const stage of [10, 25, 50, 100]) {
+      await this.rolloutToPercentage(widgetId, version, stage);
+      await this.monitorDeployment(widgetId, version, '15m');
+      
+      if (await this.hasIssues(widgetId, version)) {
+        await this.rollback(widgetId);
+        throw new DeploymentError('Deployment failed metrics checks');
+      }
+    }
+  }
+}
+```
+
+### Rollback Plan
+
+```yaml
+Automatic Rollback Triggers:
+  - Error rate > 5% (from baseline)
+  - Response time > 2x baseline
+  - Memory usage > 150% baseline
+  - Crash rate > 0.1%
+  - Security violations detected
+
+Rollback Process:
+  1. Immediate:
+     - Switch traffic back to previous version
+     - Alert on-call engineer
+     - Preserve logs for debugging
+     
+  2. Within 5 minutes:
+     - Full traffic restored to stable version
+     - Incident report started
+     - Affected users notified
+     
+  3. Post-mortem:
+     - Root cause analysis
+     - Fix implemented
+     - Additional tests added
+```
+
+### Feature Flags
+
+```javascript
+class FeatureManager {
+  async isEnabled(feature, context) {
+    // Check multiple conditions
+    const rules = await this.getRules(feature);
+    
+    for (const rule of rules) {
+      if (rule.type === 'percentage') {
+        // Percentage rollout
+        const hash = this.hash(context.userId + feature);
+        if (hash % 100 < rule.percentage) return true;
+        
+      } else if (rule.type === 'user_group') {
+        // Specific user groups
+        if (context.groups.includes(rule.group)) return true;
+        
+      } else if (rule.type === 'platform') {
+        // Platform-specific features
+        if (context.platform === rule.platform) return true;
+      }
+    }
+    
+    return false;
+  }
+}
+
+// Usage in widgets
+if (await features.isEnabled('ai_suggestions', { userId, platform })) {
+  // Show AI features
+}
+```
+
+This cross-cutting architecture ensures PinPoint maintains high quality, performance, and reliability across all components while providing excellent debugging and operational capabilities.
 ---
 
 ## 8. Quality Attributes
